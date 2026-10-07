@@ -42,7 +42,7 @@ COLORS = {
     "ftp": "#FFD93D",
 }
 
-OUTPUT_PATH = "training_status.html"
+OUTPUT_PATH = "docs/training_status.html"
 FTP_CSV_PATH = os.path.join("data", "ftp_history.csv")
 LOOKBACK_DAYS = 120
 
