@@ -26,7 +26,14 @@ jobs:
           USE_GARMIN: "1"
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
-
+      
+      - name: Generar totales anuales
+        run: python src/build_yearly_totals.py
+        env:
+          USE_GARMIN: "1"
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          
       - name: Publicar cambios
         run: |
           git config user.name "github-actions"
