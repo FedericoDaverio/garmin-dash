@@ -42,7 +42,7 @@ COLORS = {
     "ftp": "#FFD93D",
 }
 
-OUTPUT_PATH = "docs/training_status.html"
+OUTPUT_PATH = "training_status.html"
 FTP_CSV_PATH = os.path.join("data", "ftp_history.csv")
 LOOKBACK_DAYS = 120
 
@@ -168,7 +168,7 @@ def line_fig(df, x, series: dict, title, unit):
     fig = go.Figure()
     for col, (label, color) in series.items():
         if col in df.columns and df[col].notna().any():
-            fig.add_trace(go.Scatter(x=df[x], y=df[col], mode="lines", name=label,
+            fig.add_trace(go.Scatter(x=df[x].tolist(), y=df[col].tolist(), mode="lines", name=label,
                                       line=dict(color=color, width=2.5)))
     fig.update_layout(
         template="plotly_dark", paper_bgcolor=CARD_BG, plot_bgcolor=CARD_BG,

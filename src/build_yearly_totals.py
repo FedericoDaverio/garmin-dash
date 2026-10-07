@@ -151,10 +151,11 @@ def monthly_totals(df: pd.DataFrame, metric: str) -> pd.DataFrame:
 def cumulative_fig(cum: pd.DataFrame, title: str, unit: str):
     fig = go.Figure()
     years = sorted(cum.columns) if not cum.empty else []
+    x_vals = cum.index.tolist() if not cum.empty else []
     for year in years:
         is_current = year == years[-1]
         fig.add_trace(go.Scatter(
-            x=cum.index, y=cum[year], mode="lines", name=str(year),
+            x=x_vals, y=cum[year].tolist(), mode="lines", name=str(year),
             line=dict(color=COLORS["current_year"] if is_current else COLORS["past_years"],
                        width=3 if is_current else 1.5),
             opacity=1.0 if is_current else 0.6,
@@ -169,7 +170,8 @@ def monthly_bar_fig(monthly: pd.DataFrame, title: str, unit: str):
     month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
     fig = go.Figure()
     for year in sorted(monthly.columns) if not monthly.empty else []:
-        fig.add_trace(go.Bar(x=[month_names[m - 1] for m in monthly.index], y=monthly[year], name=str(year)))
+        fig.add_trace(go.Bar(x=[month_names[m - 1] for m in monthly.index],
+                              y=monthly[year].tolist(), name=str(year)))
     fig.update_layout(template="plotly_dark", paper_bgcolor=CARD_BG, plot_bgcolor=CARD_BG,
                        title=title, barmode="group", yaxis_title=unit, height=320,
                        margin=dict(l=10, r=10, t=40, b=10))
