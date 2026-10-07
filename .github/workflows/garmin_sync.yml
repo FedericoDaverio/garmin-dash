@@ -17,6 +17,9 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Crear carpetas de salida
+        run: mkdir -p docs data
+
       - name: Generar estado de entrenamiento
         run: python src/build_training_status.py
         env:
@@ -28,6 +31,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add docs/ data/
+          git add -A
           git commit -m "Auto-update Garmin data" || echo "Sin cambios"
           git push
