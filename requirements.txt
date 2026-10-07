@@ -1,0 +1,5 @@
+garminconnect
+curl_cffi
+pandas
+numpy
+plotly
