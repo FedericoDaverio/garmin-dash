@@ -331,18 +331,37 @@ def mock_wellness():
 # ---------------------------------------------------------------------------
 
 def debug_dump(client):
-    """Imprime la respuesta cruda de los 3 endpoints problemáticos, para
-    ajustar el parseo contra la forma real que usa esta cuenta/dispositivo.
-    No escribe ningún archivo."""
+    """Imprime la respuesta cruda de los endpoints problemáticos, usando
+    fechas reales de actividad (no 'hoy') para darles la mejor oportunidad
+    de traer datos. No escribe ningún archivo."""
+    activities = fetch_activities(client)
+    cutoff = (TODAY - timedelta(days=365)).isoformat()
+    recent = [a for a in activities if a["d"] >= cutoff]
+    last_any = recent[-1]["d"] if recent else TODAY.isoformat()
+    last_run = next((a["d"] for a in reversed(recent) if sportOf(a["t"]) == "running"), None)
+    last_bike = next((a["d"] for a in reversed(recent) if sportOf(a["t"]) == "cycling"), None)
+
+    print(f"last_any={last_any} last_run={last_run} last_bike={last_bike}")
+
     calls = {
-        "get_training_status(today)": lambda: client.get_training_status(TODAY.isoformat()),
-        "get_max_metrics(today)": lambda: client.get_max_metrics(TODAY.isoformat()),
+        f"get_training_status({last_any})": lambda: client.get_training_status(last_any),
+        f"get_max_metrics({last_run}) [running]": (lambda: client.get_max_metrics(last_run)) if last_run else None,
+        f"get_max_metrics({last_bike}) [cycling]": (lambda: client.get_max_metrics(last_bike)) if last_bike else None,
         "get_cycling_ftp()": lambda: client.get_cycling_ftp(),
+        "get_weekly_steps()": lambda: client.get_weekly_steps(),
+        "get_weekly_stress()": lambda: client.get_weekly_stress(),
+        "get_weekly_intensity_minutes(...)": lambda: client.get_weekly_intensity_minutes(
+            (TODAY - timedelta(weeks=52)).isoformat(), TODAY.isoformat()),
     }
     for label, fn in calls.items():
         print(f"\n{'=' * 20} {label} {'=' * 20}")
+        if fn is None:
+            print("SKIPPED: no hay actividad de ese tipo en los últimos 365 días")
+            continue
         try:
-            print(json.dumps(fn(), indent=2, ensure_ascii=False, default=str))
+            result = fn()
+            text = json.dumps(result, indent=2, ensure_ascii=False, default=str)
+            print(text[:4000] + ("\n... [truncado]" if len(text) > 4000 else ""))
         except Exception as e:
             print(f"ERROR: {e}")
 
