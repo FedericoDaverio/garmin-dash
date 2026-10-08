@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: "full (actividades + wellness) o activities (solo actividades, más rápido)"
+        description: "full (todo) / activities (solo actividades, rápido) / debug (imprime JSON crudo, no guarda nada)"
         default: "full"
 
 jobs:
@@ -28,8 +28,10 @@ jobs:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           ONLY_ACTIVITIES: ${{ github.event.inputs.scope == 'activities' && '1' || '0' }}
+          DEBUG_WELLNESS: ${{ github.event.inputs.scope == 'debug' && '1' || '0' }}
 
       - name: Publicar cambios
+        if: ${{ github.event.inputs.scope != 'debug' }}
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
