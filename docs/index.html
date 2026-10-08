@@ -190,20 +190,7 @@
   <main id="panel-coach" hidden>
     <div class="coach">
       <div class="panel">
-        <h2 data-i18n="goals"></h2>
-        <div class="row-2">
-          <div class="field"><label for="g-cyc-km" data-i18n="goalCycKm"></label><input id="g-cyc-km" type="number" min="0"></div>
-          <div class="field"><label for="g-run-km" data-i18n="goalRunKm"></label><input id="g-run-km" type="number" min="0"></div>
-          <div class="field"><label for="g-cyc-elev" data-i18n="goalCycElev"></label><input id="g-cyc-elev" type="number" min="0"></div>
-          <div class="field"><label for="g-hours" data-i18n="goalHours"></label><input id="g-hours" type="number" min="0"></div>
-        </div>
-        <div class="row-2">
-          <div class="field"><label for="g-event" data-i18n="goalEvent"></label><input id="g-event" type="text"></div>
-          <div class="field"><label for="g-date" data-i18n="goalDate"></label><input id="g-date" type="date"></div>
-        </div>
-        <div class="field"><label for="g-notes" data-i18n="goalNotes"></label><textarea id="g-notes"></textarea></div>
-
-        <h2 data-i18n="raceGoal" style="margin-top:20px"></h2>
+        <h2 data-i18n="raceGoal"></h2>
         <div class="row-2">
           <div class="field"><label for="g-race-sport" data-i18n="raceSport"></label>
             <select id="g-race-sport">
@@ -217,9 +204,9 @@
           <div class="field"><label for="g-race-elev" data-i18n="raceElev"></label><input id="g-race-elev" type="number" min="0"></div>
           <div class="field"><label for="g-race-time" data-i18n="raceTime"></label><input id="g-race-time" type="text" placeholder="hh:mm"></div>
         </div>
+        <div class="field"><label for="g-notes" data-i18n="goalNotes"></label><textarea id="g-notes"></textarea></div>
 
         <button class="btn primary" id="btn-goals" data-i18n="saveGoals"></button>
-        <div id="goal-progress"></div>
       </div>
       <div class="panel">
         <h2 data-i18n="coach"></h2>
@@ -878,40 +865,18 @@ function downloadCSV(list, filename) {
 // ---------------------------------------------------------------------------
 // Objetivos
 // ---------------------------------------------------------------------------
-const GOAL_FIELDS = { cycKm: "g-cyc-km", runKm: "g-run-km", cycElev: "g-cyc-elev", hours: "g-hours",
-                      event: "g-event", date: "g-date", notes: "g-notes",
-                      raceSport: "g-race-sport", raceDate: "g-race-date", raceKm: "g-race-km",
-                      raceElev: "g-race-elev", raceTime: "g-race-time" };
+const GOAL_FIELDS = { notes: "g-notes", raceSport: "g-race-sport", raceDate: "g-race-date",
+                      raceKm: "g-race-km", raceElev: "g-race-elev", raceTime: "g-race-time" };
 function getGoals() { try { return JSON.parse(store.get("goals", "{}")); } catch { return {}; } }
 function fillGoals() {
   const g = getGoals();
   for (const [k, id] of Object.entries(GOAL_FIELDS)) $(id).value = g[k] ?? "";
-  renderGoalProgress();
 }
 function saveGoals() {
   const g = {};
   for (const [k, id] of Object.entries(GOAL_FIELDS)) g[k] = $(id).value;
   store.set("goals", JSON.stringify(g));
-  renderGoalProgress();
   toast(t("goalsSaved"));
-}
-function ytd(sport, key) {
-  return sum(state.acts.filter((a) => a.year === CY && (sport === "all" || a.sport === sport)), key);
-}
-function renderGoalProgress() {
-  const g = getGoals();
-  const rows = [
-    { label: t("goalCycKm"), cur: ytd("cycling", "km"), goal: +g.cycKm, unit: "km" },
-    { label: t("goalRunKm"), cur: ytd("running", "km"), goal: +g.runKm, unit: "km" },
-    { label: t("goalCycElev"), cur: ytd("cycling", "elev"), goal: +g.cycElev, unit: "m" },
-    { label: t("goalHours"), cur: ytd("all", "h"), goal: +g.hours, unit: "h" },
-  ].filter((r) => r.goal > 0);
-  $("goal-progress").innerHTML = rows.map((r) => {
-    const pct = Math.min(100, (r.cur / r.goal) * 100);
-    return `<div class="progress"><div class="top"><span>${r.label}</span>
-      <span>${fmt(r.cur)} ${t("ofGoal")} ${fmt(r.goal)} ${r.unit}</span></div>
-      <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div></div>`;
-  }).join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -954,10 +919,10 @@ function systemPrompt() {
     `You are an experienced endurance coach (cycling and running). Answer in ${t("answerLang")}.`,
     `Be concise and concrete: short paragraphs or short bullet lists, use the athlete's real numbers.`,
     `Today is ${today.toISOString().slice(0, 10)}. Athlete: ${state.data?.athlete || "unknown"}.`,
-    `Athlete goals (JSON, empty fields mean not set): ${JSON.stringify(goals)}`,
     hasRace
       ? `Specific upcoming race target (any blank field means the athlete left it open — don't assume a value for it): ${JSON.stringify(race)}`
       : `No specific race target has been set yet.`,
+    goals.notes ? `Athlete's own notes for the coach: ${goals.notes}` : `No extra notes from the athlete.`,
     `Wellness and training-status summary:\n${wellnessSummaryForPrompt()}`,
     `Complete activity history (CSV):\n${activitiesCsv()}`,
     `Whenever you give a training plan (a set of workouts across days/weeks), always lay it out as a clear day-by-day or week-by-week structure (markdown table or list) so it can be read as a standalone plan — the UI lets the athlete download your reply as a file, so make the plan self-contained and well formatted.`,
@@ -1161,8 +1126,7 @@ function showTab(tab) {
   $("panel-training").hidden = tab !== "training";
   $("panel-health").hidden = tab !== "health";
   $("panel-sport").hidden = !["cycling", "running", "all"].includes(tab);
-  if (tab === "coach") renderGoalProgress();
-  else if (tab === "training") { if (state.data) renderTraining(); }
+  if (tab === "training") { if (state.data) renderTraining(); }
   else if (tab === "health") { if (state.data) renderHealth(); }
   else if (state.data) renderSport(tab);
 }
@@ -1200,7 +1164,7 @@ $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(
 //   crypto.subtle.digest("SHA-256", new TextEncoder().encode("tu_password"))
 //     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")))
 // Copia el resultado aquí abajo. Vacío = candado desactivado.
-const PASSWORD_HASH = "";
+const PASSWORD_HASH = "95c41b7899585516267fdb045910ba4a178a518d759db56b1b9648808d295922";
 
 async function sha256Hex(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -1213,7 +1177,6 @@ async function startApp() {
   try {
     await loadData();
     renderAll();
-    renderGoalProgress();
   } catch {
     $("panel-sport").innerHTML = `<div class="empty">${t("loadError")}</div>`;
   }
