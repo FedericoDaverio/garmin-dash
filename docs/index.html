@@ -132,9 +132,30 @@
     .kpi .value { font-size: 44px; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+  #lock-screen { position: fixed; inset: 0; background: var(--bg); z-index: 50;
+                 display: flex; align-items: center; justify-content: center; }
+  #lock-card { background: var(--card); border-radius: var(--r-lg); padding: 32px; width: min(340px, 90vw); text-align: center; }
+  #lock-card h2 { margin: 0 0 4px; font-size: 20px; }
+  #lock-card p { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  #lock-card input { width: 100%; background: var(--card-2); border: 1px solid var(--line);
+                      border-radius: var(--r-sm); padding: 11px 14px; text-align: center; margin-bottom: 10px; }
+  #lock-card .btn { width: 100%; justify-content: center; }
+  #lock-error { color: var(--accent); font-size: 13px; min-height: 18px; margin-top: 8px; }
 </style>
 </head>
 <body>
+
+<div id="lock-screen">
+  <div id="lock-card">
+    <h2 data-i18n="lockTitle"></h2>
+    <p data-i18n="lockHint"></p>
+    <input id="lock-input" type="password" autocomplete="off">
+    <button class="btn primary" id="lock-submit" data-i18n="lockEnter"></button>
+    <div id="lock-error"></div>
+  </div>
+</div>
+
 <div class="wrap">
   <header>
     <div class="brand">
@@ -181,6 +202,22 @@
           <div class="field"><label for="g-date" data-i18n="goalDate"></label><input id="g-date" type="date"></div>
         </div>
         <div class="field"><label for="g-notes" data-i18n="goalNotes"></label><textarea id="g-notes"></textarea></div>
+
+        <h2 data-i18n="raceGoal" style="margin-top:20px"></h2>
+        <div class="row-2">
+          <div class="field"><label for="g-race-sport" data-i18n="raceSport"></label>
+            <select id="g-race-sport">
+              <option value="">—</option>
+              <option value="cycling" data-i18n="cycling"></option>
+              <option value="running" data-i18n="running"></option>
+            </select>
+          </div>
+          <div class="field"><label for="g-race-date" data-i18n="raceDate"></label><input id="g-race-date" type="date"></div>
+          <div class="field"><label for="g-race-km" data-i18n="raceDistance"></label><input id="g-race-km" type="number" min="0" step="0.1"></div>
+          <div class="field"><label for="g-race-elev" data-i18n="raceElev"></label><input id="g-race-elev" type="number" min="0"></div>
+          <div class="field"><label for="g-race-time" data-i18n="raceTime"></label><input id="g-race-time" type="text" placeholder="hh:mm"></div>
+        </div>
+
         <button class="btn primary" id="btn-goals" data-i18n="saveGoals"></button>
         <div id="goal-progress"></div>
       </div>
@@ -239,6 +276,9 @@ const I18N = {
     goalCycElev: "Desnivel de ciclismo (m)", goalHours: "Horas totales en el año",
     goalEvent: "Evento principal", goalDate: "Fecha del evento", goalNotes: "Notas para el coach",
     saveGoals: "Guardar objetivos", goalsSaved: "Objetivos guardados",
+    raceGoal: "Objetivo de carrera específica", raceSport: "Deporte", raceDate: "Fecha de la carrera",
+    raceDistance: "Distancia (km)", raceElev: "Desnivel (m)", raceTime: "Tiempo objetivo (opcional)",
+    downloadPlan: "Descargar",
     chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…", retrying: "reintentando",
     geminiBusy: "Gemini está saturado ahora mismo. Ya reintenté unas veces — prueba de nuevo en un minuto.",
     chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
@@ -267,6 +307,8 @@ const I18N = {
     avgHrAll: "FC media en todas las actividades",
     avgSleep: "Horas de sueño (promedio)", stepsPerWeek: "Pasos por semana", stressPerWeek: "Estrés por semana",
     noWellness: "Todavía no hay datos de bienestar — corre el workflow para generarlos.",
+    lockTitle: "Acceso privado", lockHint: "Esta página tiene datos personales. Ingresa la contraseña.",
+    lockEnter: "Entrar", lockWrong: "Contraseña incorrecta",
   },
   en: {
     locale: "en-US", refresh: "Refresh data", synced: "Updated {d}",
@@ -284,6 +326,9 @@ const I18N = {
     goalCycElev: "Cycling elevation (m)", goalHours: "Total hours this year",
     goalEvent: "Main event", goalDate: "Event date", goalNotes: "Notes for the coach",
     saveGoals: "Save goals", goalsSaved: "Goals saved",
+    raceGoal: "Specific race goal", raceSport: "Sport", raceDate: "Race date",
+    raceDistance: "Distance (km)", raceElev: "Elevation (m)", raceTime: "Target time (optional)",
+    downloadPlan: "Download",
     chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…", retrying: "retrying",
     geminiBusy: "Gemini is overloaded right now. I already retried a few times — try again in a minute.",
     chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
@@ -312,6 +357,8 @@ const I18N = {
     avgHrAll: "Avg heart rate across all activities",
     avgSleep: "Sleep hours (average)", stepsPerWeek: "Steps per week", stressPerWeek: "Stress per week",
     noWellness: "No wellness data yet — run the workflow to generate it.",
+    lockTitle: "Private access", lockHint: "This page has personal data. Enter the password.",
+    lockEnter: "Enter", lockWrong: "Wrong password",
   },
   it: {
     locale: "it-IT", refresh: "Aggiorna dati", synced: "Aggiornato il {d}",
@@ -329,6 +376,9 @@ const I18N = {
     goalCycElev: "Dislivello in bici (m)", goalHours: "Ore totali nell'anno",
     goalEvent: "Evento principale", goalDate: "Data dell'evento", goalNotes: "Note per il coach",
     saveGoals: "Salva obiettivi", goalsSaved: "Obiettivi salvati",
+    raceGoal: "Obiettivo di gara specifico", raceSport: "Sport", raceDate: "Data della gara",
+    raceDistance: "Distanza (km)", raceElev: "Dislivello (m)", raceTime: "Tempo obiettivo (opzionale)",
+    downloadPlan: "Scarica",
     chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…", retrying: "nuovo tentativo",
     geminiBusy: "Gemini è sovraccarico in questo momento. Ho già riprovato un paio di volte — riprova tra un minuto.",
     chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
@@ -357,6 +407,8 @@ const I18N = {
     avgHrAll: "FC media su tutte le attività",
     avgSleep: "Ore di sonno (media)", stepsPerWeek: "Passi a settimana", stressPerWeek: "Stress a settimana",
     noWellness: "Ancora nessun dato di benessere — esegui il workflow per generarli.",
+    lockTitle: "Accesso privato", lockHint: "Questa pagina contiene dati personali. Inserisci la password.",
+    lockEnter: "Entra", lockWrong: "Password errata",
   },
 };
 
@@ -827,7 +879,9 @@ function downloadCSV(list, filename) {
 // Objetivos
 // ---------------------------------------------------------------------------
 const GOAL_FIELDS = { cycKm: "g-cyc-km", runKm: "g-run-km", cycElev: "g-cyc-elev", hours: "g-hours",
-                      event: "g-event", date: "g-date", notes: "g-notes" };
+                      event: "g-event", date: "g-date", notes: "g-notes",
+                      raceSport: "g-race-sport", raceDate: "g-race-date", raceKm: "g-race-km",
+                      raceElev: "g-race-elev", raceTime: "g-race-time" };
 function getGoals() { try { return JSON.parse(store.get("goals", "{}")); } catch { return {}; } }
 function fillGoals() {
   const g = getGoals();
@@ -868,13 +922,45 @@ function activitiesCsv() {
     [a.d, a.sport, a.t, a.km, a.elev, a.h, a.hr ?? "", a.spd ?? ""].join(","));
   return "date,sport,type,km,elev_m,hours,avg_hr,avg_kmh\n" + rows.join("\n");
 }
+function wellnessSummaryForPrompt() {
+  const w = state.wellness;
+  if (!w) return "No wellness/training-status data available yet.";
+  const last = (arr) => (arr && arr.length ? arr[arr.length - 1] : null);
+  const avg = (arr, key) => {
+    const vals = (arr || []).map((p) => p[key]).filter((v) => v != null);
+    return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : null;
+  };
+  const ts = w.training_status || {};
+  const lastVo2 = last(w.vo2max) || {};
+  const lastFtp = last(w.ftp) || {};
+  return [
+    `Training status: ${ts.phrase || "n/a"} (load focus: ${ts.loadFocus || "n/a"}, HRV status: ${ts.hrvStatus || "n/a"})`,
+    `VO2max category: ${w.vo2max_category || "n/a"}. Latest VO2max — running: ${lastVo2.run ?? "n/a"}, cycling: ${lastVo2.bike ?? "n/a"}.`,
+    `Latest cycling FTP: ${lastFtp.ftp ?? "n/a"} W (as of ${lastFtp.d ?? "n/a"}).`,
+    `Average sleep (recent period): ${avg(w.sleep, "h") ?? "n/a"} h/night.`,
+    `Average weekly steps: ${avg(w.steps_weekly, "steps") ?? "n/a"}.`,
+    `Average weekly stress level: ${avg(w.stress_weekly, "stress") ?? "n/a"}.`,
+  ].join("\n");
+}
 function systemPrompt() {
+  const goals = getGoals();
+  const race = {
+    sport: goals.raceSport || null, date: goals.raceDate || null,
+    distance_km: goals.raceKm || null, elevation_m: goals.raceElev || null,
+    target_time: goals.raceTime || null,
+  };
+  const hasRace = race.sport || race.date || race.distance_km || race.elevation_m || race.target_time;
   return [
     `You are an experienced endurance coach (cycling and running). Answer in ${t("answerLang")}.`,
     `Be concise and concrete: short paragraphs or short bullet lists, use the athlete's real numbers.`,
     `Today is ${today.toISOString().slice(0, 10)}. Athlete: ${state.data?.athlete || "unknown"}.`,
-    `Athlete goals (JSON, empty fields mean not set): ${JSON.stringify(getGoals())}`,
+    `Athlete goals (JSON, empty fields mean not set): ${JSON.stringify(goals)}`,
+    hasRace
+      ? `Specific upcoming race target (any blank field means the athlete left it open — don't assume a value for it): ${JSON.stringify(race)}`
+      : `No specific race target has been set yet.`,
+    `Wellness and training-status summary:\n${wellnessSummaryForPrompt()}`,
     `Complete activity history (CSV):\n${activitiesCsv()}`,
+    `Whenever you give a training plan (a set of workouts across days/weeks), always lay it out as a clear day-by-day or week-by-week structure (markdown table or list) so it can be read as a standalone plan — the UI lets the athlete download your reply as a file, so make the plan self-contained and well formatted.`,
   ].join("\n\n");
 }
 function md(text) {
@@ -895,6 +981,23 @@ function addMsg(role, html, pending = false) {
   $("messages").appendChild(div);
   $("messages").scrollTop = $("messages").scrollHeight;
   return div;
+}
+function addDownloadLink(div, plainText) {
+  const a = document.createElement("a");
+  a.href = "#";
+  a.className = "chip";
+  a.style.cssText = "display:inline-block;margin-top:8px;text-decoration:none;";
+  a.textContent = `⬇ ${t("downloadPlan")}`;
+  a.onclick = (e) => {
+    e.preventDefault();
+    const blob = new Blob([plainText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = `coach_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.txt`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  div.appendChild(a);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -953,6 +1056,7 @@ async function ask(text) {
     const reply = provider === "groq" ? await callGroq(model, key, pending) : await callGemini(model, key, pending);
     pending.classList.remove("pending");
     pending.innerHTML = md(reply);
+    addDownloadLink(pending, reply);
     state.chat.push({ role: "model", parts: [{ text: reply }] });
   } catch (e) {
     console.error(e);
@@ -1087,13 +1191,53 @@ $("btn-goals").onclick = saveGoals;
 $("btn-send").onclick = () => ask($("chat-input").value);
 $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") ask($("chat-input").value); });
 
+// ---------------------------------------------------------------------------
+// Candado de acceso (casual — ver nota en PASSWORD_HASH)
+// ---------------------------------------------------------------------------
+// Hash SHA-256 de la contraseña. Para generarlo SIN escribir tu contraseña
+// en ningún archivo ni chat: abre la consola del navegador (F12) en
+// cualquier página y corre:
+//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("tu_password"))
+//     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")))
+// Copia el resultado aquí abajo. Vacío = candado desactivado.
+const PASSWORD_HASH = "";
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function startApp() {
+  applyStaticText();
+  fillGoals();
+  showTab("cycling");
+  try {
+    await loadData();
+    renderAll();
+    renderGoalProgress();
+  } catch {
+    $("panel-sport").innerHTML = `<div class="empty">${t("loadError")}</div>`;
+  }
+}
+async function tryUnlock() {
+  const input = $("lock-input").value;
+  if ((await sha256Hex(input)) === PASSWORD_HASH) {
+    store.set("unlocked", PASSWORD_HASH);
+    $("lock-screen").remove();
+    startApp();
+  } else {
+    $("lock-error").textContent = t("lockWrong");
+  }
+}
 document.documentElement.dataset.theme = state.theme;
-applyStaticText();
-fillGoals();
-showTab("cycling");
-loadData()
-  .then(() => { renderAll(); renderGoalProgress(); })
-  .catch(() => { $("panel-sport").innerHTML = `<div class="empty">${t("loadError")}</div>`; });
+applyStaticText(); // para que el candado ya muestre el idioma guardado
+if (!PASSWORD_HASH || store.get("unlocked", "") === PASSWORD_HASH) {
+  $("lock-screen")?.remove();
+  startApp();
+} else {
+  $("lock-submit").onclick = tryUnlock;
+  $("lock-input").addEventListener("keydown", (e) => { if (e.key === "Enter") tryUnlock(); });
+  $("lock-input").focus();
+}
 </script>
 </body>
 </html>
