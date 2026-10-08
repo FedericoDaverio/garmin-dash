@@ -45,6 +45,15 @@ def safe_path(d, *keys, default=None):
     return cur
 
 
+def sportOf(type_key: str) -> str:
+    t = (type_key or "").lower()
+    if "cycl" in t or "bik" in t or "ride" in t:
+        return "cycling"
+    if "run" in t:
+        return "running"
+    return "other"
+
+
 def first_device_block(d):
     """Varias respuestas de training status anidan los datos bajo un
     deviceId dinámico: {"123456": {...}}. Devuelve el primer bloque."""
@@ -124,72 +133,78 @@ def mock_activities():
 # Wellness: training load, VO2max, FTP, sueño, pasos, estrés, intensidad
 # ---------------------------------------------------------------------------
 
-def fetch_training_load(client, weeks=52):
-    """Un punto por semana (como el gráfico nativo de Garmin). Devuelve
-    también el status más reciente para la tarjeta de resumen."""
+def fetch_training_load(client, candidate_dates, max_calls=120):
+    """Garmin solo recalcula el training status/load los días en que hubo
+    actividad — pedirlo para fechas arbitrarias casi siempre da null. Por
+    eso se consulta en los días reales de actividad (más recientes primero)."""
     points, latest = [], {}
-    for i in range(weeks):
-        d = TODAY - timedelta(days=7 * i)
+    for i, d in enumerate(candidate_dates[:max_calls]):
         try:
-            data = client.get_training_status(d.isoformat())
+            data = client.get_training_status(d)
         except Exception:
             continue
         if not data:
             continue
-        block = first_device_block(safe_path(data, "mostRecentTrainingLoadBalance", default={})) \
-            or safe_path(data, "mostRecentTrainingLoadBalance", default={})
-        acute = safe_path(block, "monthlyLoadAerobicLow") or safe_path(data, "dailyTrainingLoadAcute") \
-            or safe_path(block, "acuteTrainingLoad")
-        lo = safe_path(block, "minTrainingLoadAcute")
-        hi = safe_path(block, "maxTrainingLoadAcute")
-        chronic = safe_path(block, "chronicTrainingLoad") or safe_path(data, "dailyTrainingLoadChronic")
-        if acute is None and chronic is None:
+        balance = safe_path(data, "mostRecentTrainingLoadBalance") or {}
+        balance_block = first_device_block(balance.get("metricsTrainingLoadBalanceDTOMap", {})) or balance
+        acute = safe_path(balance_block, "monthlyLoadAerobicLow") or safe_path(balance_block, "acuteTrainingLoad") \
+            or safe_path(data, "dailyTrainingLoadAcute")
+        chronic = safe_path(balance_block, "chronicTrainingLoad") or safe_path(data, "dailyTrainingLoadChronic")
+        lo = safe_path(balance_block, "minTrainingLoadAcute")
+        hi = safe_path(balance_block, "maxTrainingLoadAcute")
+        status = safe_path(data, "mostRecentTrainingStatus") or {}
+        status_block = first_device_block(status.get("latestTrainingStatusData", {})) or status
+        phrase = safe_path(status_block, "trainingStatusFeedbackPhrase") or safe_path(status, "trainingStatusFeedbackPhrase")
+        if acute is None and chronic is None and phrase is None:
             continue
-        points.append({
-            "d": d.isoformat(), "acute": acute, "chronic": chronic,
-            "lo": lo, "hi": hi,
-        })
-        if i == 0:
-            status_block = first_device_block(safe_path(data, "mostRecentTrainingStatus", "latestTrainingStatusData", default={}))
+        if acute is not None or chronic is not None:
+            points.append({"d": d, "acute": acute, "chronic": chronic, "lo": lo, "hi": hi})
+        if i == 0 or not latest:
             latest = {
-                "phrase": safe_path(status_block, "trainingStatusFeedbackPhrase")
-                or safe_path(data, "mostRecentTrainingStatus", "trainingStatusFeedbackPhrase"),
-                "loadFocus": safe_path(data, "mostRecentTrainingLoadBalance", "trainingBalanceFeedbackPhrase"),
-                "hrvStatus": safe_path(data, "mostRecentVO2Max", "hrvStatus")
-                or safe_path(data, "hrvStatus"),
+                "phrase": phrase,
+                "loadFocus": safe_path(balance, "trainingBalanceFeedbackPhrase"),
+                "hrvStatus": safe_path(data, "hrvStatus") or safe_path(data, "mostRecentVO2Max", "hrvStatus"),
             }
     points.sort(key=lambda p: p["d"])
-    # banda óptima aproximada cuando Garmin no la da: ACWR 0.8–1.3 sobre la carga crónica
+    # banda óptima aproximada cuando Garmin no la expone: ACWR 0.8–1.3 sobre la carga crónica
     for p in points:
         if (p["lo"] is None or p["hi"] is None) and p.get("chronic"):
             p["lo"], p["hi"] = round(p["chronic"] * 0.8), round(p["chronic"] * 1.3)
     return points, latest
 
 
-def fetch_vo2max(client, samples=26, step_days=14):
+def fetch_vo2max_for(client, dates, field, max_calls=80):
+    """field: 'generic' (running) o 'cycling'."""
     points = []
-    for i in range(samples):
-        d = TODAY - timedelta(days=step_days * i)
+    for d in dates[:max_calls]:
         try:
-            data = client.get_max_metrics(d.isoformat())
+            data = client.get_max_metrics(d)
         except Exception:
             continue
         if not data:
             continue
         entry = data[0] if isinstance(data, list) else data
-        run_v = safe_path(entry, "generic", "vo2MaxPreciseValue") or safe_path(entry, "generic", "vo2MaxValue")
-        bike_v = safe_path(entry, "cycling", "vo2MaxValue")
-        fitness_age = safe_path(entry, "fitnessAge", "fitnessAge")
-        if run_v or bike_v:
-            points.append({"d": d.isoformat(), "run": run_v, "bike": bike_v, "fitnessAge": fitness_age})
-    points.sort(key=lambda p: p["d"])
-    category = None
-    if points:
-        last = points[-1]
-        v = last.get("run") or last.get("bike")
-        # categorías aproximadas de Garmin para un adulto promedio (ajustan por edad/sexo normalmente)
+        v = safe_path(entry, field, "vo2MaxPreciseValue") or safe_path(entry, field, "vo2MaxValue")
         if v:
-            category = "Excelente" if v >= 55 else "Bueno" if v >= 45 else "Regular" if v >= 35 else "Bajo"
+            points.append({"d": d, "v": v})
+    points.sort(key=lambda p: p["d"])
+    return points
+
+
+def fetch_vo2max(client, run_dates, bike_dates):
+    run_points = fetch_vo2max_for(client, run_dates, "generic")
+    bike_points = fetch_vo2max_for(client, bike_dates, "cycling")
+    by_date = {}
+    for p in run_points:
+        by_date.setdefault(p["d"], {"d": p["d"]})["run"] = p["v"]
+    for p in bike_points:
+        by_date.setdefault(p["d"], {"d": p["d"]})["bike"] = p["v"]
+    points = sorted(by_date.values(), key=lambda p: p["d"])
+    category = None
+    last_v = (run_points[-1]["v"] if run_points else None) or (bike_points[-1]["v"] if bike_points else None)
+    if last_v:
+        # categorías aproximadas (Garmin ajusta por edad/sexo; esto es solo una referencia general)
+        category = "Excelente" if last_v >= 55 else "Bueno" if last_v >= 45 else "Regular" if last_v >= 35 else "Bajo"
     return points, category
 
 
@@ -198,17 +213,11 @@ def fetch_ftp(client):
         data = client.get_cycling_ftp()
     except Exception:
         return []
-    if not data:
+    if not isinstance(data, dict):
         return []
-    history = data.get("ftpValueHistory") if isinstance(data, dict) else None
-    if isinstance(history, list):
-        return sorted(
-            [{"d": (h.get("date") or h.get("calendarDate") or "")[:10], "ftp": h.get("ftpValue") or h.get("value")}
-             for h in history if h.get("ftpValue") or h.get("value")],
-            key=lambda p: p["d"],
-        )
-    v = safe_path(data, "ftpValue") or safe_path(data, "value")
-    return [{"d": TODAY.isoformat(), "ftp": v}] if v else []
+    v = data.get("functionalThresholdPower")
+    d = (data.get("calendarDate") or "")[:10] or TODAY.isoformat()
+    return [{"d": d, "ftp": v}] if v else []
 
 
 def fetch_sleep(client, days=90):
@@ -367,8 +376,13 @@ def main():
         if only_activities:
             wellness = None  # no se toca wellness.json en un refresco rápido
         else:
-            training_load, training_status = fetch_training_load(client)
-            vo2max, vo2max_category = fetch_vo2max(client)
+            cutoff = (TODAY - timedelta(days=365)).isoformat()
+            all_dates = sorted({a["d"] for a in activities if a["d"] >= cutoff}, reverse=True)
+            run_dates = sorted({a["d"] for a in activities if a["d"] >= cutoff and sportOf(a["t"]) == "running"}, reverse=True)
+            bike_dates = sorted({a["d"] for a in activities if a["d"] >= cutoff and sportOf(a["t"]) == "cycling"}, reverse=True)
+
+            training_load, training_status = fetch_training_load(client, all_dates)
+            vo2max, vo2max_category = fetch_vo2max(client, run_dates, bike_dates)
             wellness = {
                 "training_load": training_load, "training_status": training_status,
                 "vo2max": vo2max, "vo2max_category": vo2max_category,
