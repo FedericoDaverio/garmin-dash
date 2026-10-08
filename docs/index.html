@@ -40,7 +40,8 @@
   .btn:disabled { opacity: .5; cursor: default; }
   select.btn { appearance: none; padding-right: 14px; }
 
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 32px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin: 28px 0 32px; }
+  .kpis.tab-totals { margin: 0 0 28px; }
   .kpi { background: var(--card); border-radius: var(--r-lg); padding: 22px 24px; }
   .kpi .label { color: var(--muted); font-size: 14px; }
   .kpi .value { font-size: 56px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; margin-top: 8px; }
@@ -109,6 +110,22 @@
            background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px;
            font-size: 14px; max-width: 90vw; display: none; z-index: 10; }
 
+  .status-card { background: var(--card); border-radius: var(--r-lg); padding: 24px; display: grid;
+                 grid-template-columns: auto 1fr; gap: 24px; align-items: center; margin-bottom: 24px; }
+  .status-card .phrase { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+  .status-card .subtle { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .status-card .side-metrics { display: grid; grid-template-columns: repeat(3, auto); gap: 24px; justify-content: end; }
+  .status-card .side-metrics .m-val { font-size: 18px; font-weight: 600; }
+  .status-card .side-metrics .m-lbl { color: var(--muted); font-size: 12px; }
+  .status-bar { grid-column: 1 / -1; height: 10px; border-radius: 999px; overflow: hidden; display: flex; }
+  .status-bar i { height: 100%; }
+  .status-bar-caption { grid-column: 1 / -1; display: flex; justify-content: space-between;
+                        color: var(--muted); font-size: 12px; margin-top: -8px; }
+
+  @media (max-width: 860px) {
+    .status-card { grid-template-columns: 1fr; }
+    .status-card .side-metrics { grid-template-columns: repeat(3, 1fr); justify-content: stretch; }
+  }
   @media (max-width: 860px) {
     .kpis, .grid-3, .coach { grid-template-columns: 1fr; }
     .tiles { grid-template-columns: repeat(2, 1fr); }
@@ -140,10 +157,14 @@
     <button class="tab" role="tab" data-tab="cycling" data-i18n="cycling"></button>
     <button class="tab" role="tab" data-tab="running" data-i18n="running"></button>
     <button class="tab" role="tab" data-tab="all" data-i18n="all"></button>
+    <button class="tab" role="tab" data-tab="training" data-i18n="trainingTab"></button>
+    <button class="tab" role="tab" data-tab="health" data-i18n="healthTab"></button>
     <button class="tab" role="tab" data-tab="coach" data-i18n="coach"></button>
   </nav>
 
   <main id="panel-sport"></main>
+  <main id="panel-training" hidden></main>
+  <main id="panel-health" hidden></main>
 
   <main id="panel-coach" hidden>
     <div class="coach">
@@ -179,8 +200,12 @@
 <dialog id="settings">
   <h2 data-i18n="settings" style="margin:0 0 4px;font-size:20px"></h2>
   <p class="note" data-i18n="storedLocal"></p>
-  <div class="field"><label for="s-gemini" data-i18n="geminiKey"></label><input id="s-gemini" type="password" autocomplete="off"></div>
-  <div class="field"><label for="s-model" data-i18n="model"></label><input id="s-model" type="text"></div>
+  <div class="field"><label for="s-provider" data-i18n="provider"></label>
+    <select id="s-provider"><option value="gemini">Gemini</option><option value="groq">Groq</option></select>
+  </div>
+  <div class="field"><label for="s-key" id="s-key-label"></label><input id="s-key" type="password" autocomplete="off"></div>
+  <div class="field"><label for="s-model" id="s-model-label"></label><input id="s-model" type="text"></div>
+  <p class="note" id="s-provider-note" style="margin-top:-6px"></p>
   <div class="field"><label for="s-gh" data-i18n="ghToken"></label><input id="s-gh" type="password" autocomplete="off"></div>
   <div class="dialog-actions">
     <button class="btn" id="s-close" data-i18n="close"></button>
@@ -195,16 +220,17 @@
 // Configuración
 // ---------------------------------------------------------------------------
 const REPO = { owner: "FedericoDaverio", repo: "garmin-dash", workflow: "garmin_sync.yml", ref: "main" };
-const DEFAULT_MODEL = "gemini-flash-latest";
+const DEFAULT_MODELS = { gemini: "gemini-3.8-flash", groq: "llama-3.3-70b-versatile" };
 
 const I18N = {
   es: {
     locale: "es-MX", refresh: "Actualizar datos", synced: "Actualizado el {d}",
-    kpiActs: "Actividades en {y}", kpiKm: "Kilómetros en {y}", kpiHours: "Horas en {y}",
+    kpiActs: "Actividades en {y}", kpiKm: "Kilómetros en {y}", kpiElev: "Desnivel en {y}", kpiHours: "Horas en {y}",
     vsLast: "{v} vs {y} a la misma fecha",
     cycling: "Ciclismo", running: "Carrera", all: "Todo", coach: "Coach IA",
     lastActivity: "Última actividad", date: "Fecha", time: "Tiempo", hr: "FC media",
-    distance: "Distancia", elevation: "Desnivel", speed: "Velocidad media", pace: "Ritmo medio",
+    distance: "Distancia", elevation: "Desnivel", speed: "Velocidad media", pace: "Ritmo medio", power: "Watts medios",
+    avgPowerMonth: "Watts medios y normalizados por mes (últimos 12 meses)", avgPower: "Watts medios", normPower: "Watts normalizados",
     perYear: "Por año", kmYear: "Kilómetros", elevYear: "Desnivel", hoursYear: "Horas",
     progression: "Progresión acumulada", avg: "Promedio",
     avgNote: "La línea punteada es el promedio de los años completos.",
@@ -213,10 +239,14 @@ const I18N = {
     goalCycElev: "Desnivel de ciclismo (m)", goalHours: "Horas totales en el año",
     goalEvent: "Evento principal", goalDate: "Fecha del evento", goalNotes: "Notas para el coach",
     saveGoals: "Guardar objetivos", goalsSaved: "Objetivos guardados",
-    chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…",
+    chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…", retrying: "reintentando",
+    geminiBusy: "Gemini está saturado ahora mismo. Ya reintenté unas veces — prueba de nuevo en un minuto.",
     chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
     settings: "Ajustes", storedLocal: "Las claves se guardan solo en este navegador, nunca en el repositorio.",
-    geminiKey: "API key de Gemini", model: "Modelo de Gemini", ghToken: "Token de GitHub (para actualizar datos)",
+    geminiKey: "API key de Gemini", groqKey: "API key de Groq", model: "Modelo", ghToken: "Token de GitHub (para actualizar datos)",
+    provider: "Proveedor de IA",
+    providerNoteGemini: "Consíguela en aistudio.google.com/app/apikey (nivel gratis, puede saturarse).",
+    providerNoteGroq: "Consíguela gratis en console.groq.com/keys (sin tarjeta, muy estable).",
     save: "Guardar", close: "Cerrar", saved: "Ajustes guardados",
     needToken: "Agrega tu token de GitHub en Ajustes para actualizar.",
     needKey: "Agrega tu API key de Gemini en Ajustes.",
@@ -228,14 +258,24 @@ const I18N = {
     loadError: "No se pudieron cargar los datos (data/activities.json).",
     ofGoal: "de", answerLang: "español",
     months: ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
+    trainingTab: "Entrenamiento", healthTab: "Salud",
+    acuteLoad: "Carga de entrenamiento (aguda)", optimalRange: "Rango óptimo",
+    intensityMinutes: "Minutos de intensidad por semana",
+    trainingStatus: "Estado de entrenamiento", vo2maxLabel: "VO2 Max", loadLabel: "Carga",
+    hrvLabel: "Estado HRV", elev4w: "Desnivel (últimas 4 semanas)",
+    vo2maxCycling: "VO2max ciclismo", vo2maxRunning: "VO2max carrera",
+    avgHrAll: "FC media en todas las actividades",
+    avgSleep: "Horas de sueño (promedio)", stepsPerWeek: "Pasos por semana", stressPerWeek: "Estrés por semana",
+    noWellness: "Todavía no hay datos de bienestar — corre el workflow para generarlos.",
   },
   en: {
     locale: "en-US", refresh: "Refresh data", synced: "Updated {d}",
-    kpiActs: "Activities in {y}", kpiKm: "Kilometers in {y}", kpiHours: "Hours in {y}",
+    kpiActs: "Activities in {y}", kpiKm: "Kilometers in {y}", kpiElev: "Elevation in {y}", kpiHours: "Hours in {y}",
     vsLast: "{v} vs {y} to date",
     cycling: "Cycling", running: "Running", all: "All", coach: "AI Coach",
     lastActivity: "Last activity", date: "Date", time: "Time", hr: "Avg HR",
-    distance: "Distance", elevation: "Elevation", speed: "Avg speed", pace: "Avg pace",
+    distance: "Distance", elevation: "Elevation", speed: "Avg speed", pace: "Avg pace", power: "Avg power",
+    avgPowerMonth: "Avg and normalized power by month (last 12 months)", avgPower: "Avg power", normPower: "Normalized power",
     perYear: "Per year", kmYear: "Kilometers", elevYear: "Elevation", hoursYear: "Hours",
     progression: "Cumulative progress", avg: "Average",
     avgNote: "The dotted line is the average of complete years.",
@@ -244,10 +284,14 @@ const I18N = {
     goalCycElev: "Cycling elevation (m)", goalHours: "Total hours this year",
     goalEvent: "Main event", goalDate: "Event date", goalNotes: "Notes for the coach",
     saveGoals: "Save goals", goalsSaved: "Goals saved",
-    chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…",
+    chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…", retrying: "retrying",
+    geminiBusy: "Gemini is overloaded right now. I already retried a few times — try again in a minute.",
     chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
     settings: "Settings", storedLocal: "Keys are stored only in this browser, never in the repository.",
-    geminiKey: "Gemini API key", model: "Gemini model", ghToken: "GitHub token (to refresh data)",
+    geminiKey: "Gemini API key", groqKey: "Groq API key", model: "Model", ghToken: "GitHub token (to refresh data)",
+    provider: "AI provider",
+    providerNoteGemini: "Get one at aistudio.google.com/app/apikey (free tier, can get overloaded).",
+    providerNoteGroq: "Get a free one at console.groq.com/keys (no card, very stable).",
     save: "Save", close: "Close", saved: "Settings saved",
     needToken: "Add your GitHub token in Settings to refresh.",
     needKey: "Add your Gemini API key in Settings.",
@@ -259,14 +303,24 @@ const I18N = {
     loadError: "Couldn't load data (data/activities.json).",
     ofGoal: "of", answerLang: "English",
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    trainingTab: "Training", healthTab: "Health",
+    acuteLoad: "Training load (acute)", optimalRange: "Optimal range",
+    intensityMinutes: "Intensity minutes per week",
+    trainingStatus: "Training status", vo2maxLabel: "VO2 Max", loadLabel: "Load",
+    hrvLabel: "HRV status", elev4w: "Elevation (last 4 weeks)",
+    vo2maxCycling: "VO2max cycling", vo2maxRunning: "VO2max running",
+    avgHrAll: "Avg heart rate across all activities",
+    avgSleep: "Sleep hours (average)", stepsPerWeek: "Steps per week", stressPerWeek: "Stress per week",
+    noWellness: "No wellness data yet — run the workflow to generate it.",
   },
   it: {
     locale: "it-IT", refresh: "Aggiorna dati", synced: "Aggiornato il {d}",
-    kpiActs: "Attività nel {y}", kpiKm: "Chilometri nel {y}", kpiHours: "Ore nel {y}",
+    kpiActs: "Attività nel {y}", kpiKm: "Chilometri nel {y}", kpiElev: "Dislivello nel {y}", kpiHours: "Ore nel {y}",
     vsLast: "{v} vs {y} alla stessa data",
     cycling: "Ciclismo", running: "Corsa", all: "Tutto", coach: "Coach IA",
     lastActivity: "Ultima attività", date: "Data", time: "Tempo", hr: "FC media",
-    distance: "Distanza", elevation: "Dislivello", speed: "Velocità media", pace: "Passo medio",
+    distance: "Distanza", elevation: "Dislivello", speed: "Velocità media", pace: "Passo medio", power: "Watt medi",
+    avgPowerMonth: "Watt medi e normalizzati per mese (ultimi 12 mesi)", avgPower: "Watt medi", normPower: "Watt normalizzati",
     perYear: "Per anno", kmYear: "Chilometri", elevYear: "Dislivello", hoursYear: "Ore",
     progression: "Progressione cumulativa", avg: "Media",
     avgNote: "La linea tratteggiata è la media degli anni completi.",
@@ -275,10 +329,14 @@ const I18N = {
     goalCycElev: "Dislivello in bici (m)", goalHours: "Ore totali nell'anno",
     goalEvent: "Evento principale", goalDate: "Data dell'evento", goalNotes: "Note per il coach",
     saveGoals: "Salva obiettivi", goalsSaved: "Obiettivi salvati",
-    chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…",
+    chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…", retrying: "nuovo tentativo",
+    geminiBusy: "Gemini è sovraccarico in questo momento. Ho già riprovato un paio di volte — riprova tra un minuto.",
     chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
     settings: "Impostazioni", storedLocal: "Le chiavi restano solo in questo browser, mai nel repository.",
-    geminiKey: "Chiave API Gemini", model: "Modello Gemini", ghToken: "Token GitHub (per aggiornare i dati)",
+    geminiKey: "Chiave API Gemini", groqKey: "Chiave API Groq", model: "Modello", ghToken: "Token GitHub (per aggiornare i dati)",
+    provider: "Provider IA",
+    providerNoteGemini: "Ottienila su aistudio.google.com/app/apikey (livello gratuito, può saturarsi).",
+    providerNoteGroq: "Ottienila gratis su console.groq.com/keys (senza carta, molto stabile).",
     save: "Salva", close: "Chiudi", saved: "Impostazioni salvate",
     needToken: "Aggiungi il token GitHub nelle Impostazioni per aggiornare.",
     needKey: "Aggiungi la chiave API Gemini nelle Impostazioni.",
@@ -290,6 +348,15 @@ const I18N = {
     loadError: "Impossibile caricare i dati (data/activities.json).",
     ofGoal: "di", answerLang: "italiano",
     months: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
+    trainingTab: "Allenamento", healthTab: "Salute",
+    acuteLoad: "Carico di allenamento (acuto)", optimalRange: "Intervallo ottimale",
+    intensityMinutes: "Minuti di intensità a settimana",
+    trainingStatus: "Stato di allenamento", vo2maxLabel: "VO2 Max", loadLabel: "Carico",
+    hrvLabel: "Stato HRV", elev4w: "Dislivello (ultime 4 settimane)",
+    vo2maxCycling: "VO2max ciclismo", vo2maxRunning: "VO2max corsa",
+    avgHrAll: "FC media su tutte le attività",
+    avgSleep: "Ore di sonno (media)", stepsPerWeek: "Passi a settimana", stressPerWeek: "Stress a settimana",
+    noWellness: "Ancora nessun dato di benessere — esegui il workflow per generarli.",
   },
 };
 
@@ -351,10 +418,16 @@ function colors() {
 // ---------------------------------------------------------------------------
 // Datos
 // ---------------------------------------------------------------------------
+function parseDateField(rows) {
+  return (rows || []).map((r) => ({ ...r, dateObj: new Date(r.d) }));
+}
 async function loadData() {
-  const res = await fetch("data/activities.json", { cache: "no-store" });
-  if (!res.ok) throw new Error(res.status);
-  const j = await res.json();
+  const [actRes, wellRes] = await Promise.all([
+    fetch("data/activities.json", { cache: "no-store" }),
+    fetch("data/wellness.json", { cache: "no-store" }).catch(() => null),
+  ]);
+  if (!actRes.ok) throw new Error(actRes.status);
+  const j = await actRes.json();
   state.data = j;
   state.acts = j.activities
     .map((a) => {
@@ -362,6 +435,11 @@ async function loadData() {
       return { ...a, date: new Date(y, m - 1, d), year: y, sport: sportOf(a.t) };
     })
     .sort((a, b) => a.date - b.date);
+
+  state.wellness = null;
+  if (wellRes && wellRes.ok) {
+    try { state.wellness = await wellRes.json(); } catch { state.wellness = null; }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -377,24 +455,31 @@ function renderHeader() {
   }
 }
 
-function renderKpis() {
-  const cur = state.acts.filter((a) => a.year === CY);
+const METRIC_DEFS = {
+  acts: { labelKey: "kpiActs", unit: "", get: (l) => l.length },
+  km: { labelKey: "kpiKm", unit: "km", get: (l) => sum(l, "km") },
+  elev: { labelKey: "kpiElev", unit: "m", get: (l) => sum(l, "elev") },
+  h: { labelKey: "kpiHours", unit: "h", get: (l) => sum(l, "h") },
+};
+function totalsCardsHtml(list, keys) {
   const todayDoy = doy(today);
-  const prev = state.acts.filter((a) => a.year === CY - 1 && doy(a.date) <= todayDoy);
-  const items = [
-    { label: t("kpiActs", { y: CY }), v: cur.length, p: prev.length, dec: 0, unit: "" },
-    { label: t("kpiKm", { y: CY }), v: sum(cur, "km"), p: sum(prev, "km"), dec: 0, unit: "km" },
-    { label: t("kpiHours", { y: CY }), v: sum(cur, "h"), p: sum(prev, "h"), dec: 0, unit: "h" },
-  ];
-  $("kpis").innerHTML = items.map((k) => {
-    const diff = k.v - k.p;
-    const delta = prev.length || k.p
-      ? t("vsLast", { v: `${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff), k.dec)}${k.unit ? " " + k.unit : ""}`, y: CY - 1 })
+  const cur = list.filter((a) => a.year === CY);
+  const prev = list.filter((a) => a.year === CY - 1 && doy(a.date) <= todayDoy);
+  const havePrev = list.some((a) => a.year === CY - 1);
+  return keys.map((key) => {
+    const def = METRIC_DEFS[key];
+    const v = def.get(cur), p = def.get(prev);
+    const diff = v - p;
+    const delta = havePrev
+      ? t("vsLast", { v: `${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff))}${def.unit ? " " + def.unit : ""}`, y: CY - 1 })
       : "";
-    return `<div class="kpi"><div class="label">${k.label}</div>
-      <div class="value">${fmt(k.v, k.dec)}${k.unit ? `<small>${k.unit}</small>` : ""}</div>
+    return `<div class="kpi"><div class="label">${t(def.labelKey, { y: CY })}</div>
+      <div class="value">${fmt(v)}${def.unit ? `<small>${def.unit}</small>` : ""}</div>
       <div class="delta">${delta}</div></div>`;
   }).join("");
+}
+function renderKpis() {
+  $("kpis").innerHTML = totalsCardsHtml(state.acts, ["acts", "h"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -405,8 +490,11 @@ function renderSport(tab) {
   const panel = $("panel-sport");
   if (!list.length) { panel.innerHTML = `<div class="empty">${t("noData")}</div>`; return; }
 
+  const isCycling = tab === "cycling";
+  const isRunning = tab === "running";
+  const totalsKeys = tab === "all" ? ["acts", "h"] : ["acts", "km", "elev", "h"];
+
   const last = list[list.length - 1];
-  const isRun = last.sport === "running";
   const dateStr = last.date.toLocaleDateString(t("locale"), { day: "numeric", month: "short", year: "numeric" });
   const tiles = [
     { l: t("date"), v: dateStr },
@@ -414,10 +502,29 @@ function renderSport(tab) {
     { l: t("hr"), v: last.hr ? fmt(last.hr) : "—", u: last.hr ? "bpm" : "" },
     { l: t("distance"), v: fmt(last.km, 1), u: "km" },
     { l: t("elevation"), v: fmt(last.elev), u: "m" },
-    isRun ? { l: t("pace"), v: pace(last), u: "/km" } : { l: t("speed"), v: fmt(last.spd, 1), u: "km/h" },
+    isCycling
+      ? { l: t("power"), v: last.pw ? fmt(last.pw) : "—", u: last.pw ? "W" : "" }
+      : isRunning
+        ? { l: t("pace"), v: pace(last), u: "/km" }
+        : { l: t("speed"), v: fmt(last.spd, 1), u: "km/h" },
   ];
 
+  const years = yearRange(list);
+
+  let wellnessSections = "";
+  if (isCycling || isRunning) {
+    const vo2key = isCycling ? "bike" : "run";
+    wellnessSections += `<h2 class="section-title">VO2max</h2>
+      <div class="chart-card wide"><div class="chart" id="vo2-chart"></div></div>`;
+    if (isCycling) {
+      wellnessSections += `<h2 class="section-title">FTP</h2>
+        <div class="chart-card wide"><div class="chart" id="ftp-chart"></div></div>`;
+    }
+  }
+
   panel.innerHTML = `
+    <div class="kpis tab-totals">${totalsCardsHtml(list, totalsKeys)}</div>
+
     <h2 class="section-title">${t("lastActivity")}<span>${escapeHtml(last.n || "")}</span></h2>
     <div class="tiles">${tiles.map((x) =>
       `<div class="tile"><div class="label">${x.l}</div><div class="value">${x.v}${x.u ? `<small>${x.u}</small>` : ""}</div></div>`
@@ -429,15 +536,17 @@ function renderSport(tab) {
       <div class="chart-card"><h3>${t("elevYear")}</h3><div class="chart" id="bar-elev"></div></div>
       <div class="chart-card"><h3>${t("hoursYear")}</h3><div class="chart" id="bar-h"></div></div>
     </div>
+    ${isCycling ? `<div class="chart-card wide" style="margin-top:16px"><h3>${t("avgPowerMonth")}</h3><div class="chart" id="bar-pw"></div></div>` : ""}
 
     <h2 class="section-title">${t("progression")}</h2>
     <div class="chart-card wide"><h3>${t("kmYear")}</h3><div class="chart" id="cum-km"></div></div>
     <div class="chart-card wide"><h3>${t("elevYear")}</h3><div class="chart" id="cum-elev"></div></div>
     <div class="chart-card wide"><h3>${t("hoursYear")}</h3><div class="chart" id="cum-h"></div></div>
 
+    ${wellnessSections}
+
     <div class="download-row"><button class="btn" id="btn-csv">⬇ ${t("download")}</button></div>`;
 
-  const years = yearRange(list);
   barChart("bar-km", years, list, "km", "km", 0);
   barChart("bar-elev", years, list, "elev", "m", 0);
   barChart("bar-h", years, list, "h", "h", 0);
@@ -445,7 +554,36 @@ function renderSport(tab) {
   cumChart("cum-elev", years, list, "elev", "m", 0);
   cumChart("cum-h", years, list, "h", "h", 1);
 
+  if (isCycling) monthlyPowerBarChart("bar-pw", list);
+  if (isCycling || isRunning) {
+    vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
+    if (isCycling) ftpChart("ftp-chart");
+  }
+
   $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
+}
+
+function monthlyPowerBarChart(el, list) {
+  const c = colors();
+  const months12 = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(CY, today.getMonth() - 11 + i, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, label: `${t("months")[d.getMonth()]} ${String(d.getFullYear()).slice(2)}` };
+  });
+  const avgOf = (rows, key) => rows.length ? rows.reduce((s, a) => s + a[key], 0) / rows.length : null;
+  const avgPw = months12.map((m) => avgOf(list.filter((a) => a.year === m.year && a.date.getMonth() + 1 === m.month && a.pw), "pw"));
+  const avgNp = months12.map((m) => avgOf(list.filter((a) => a.year === m.year && a.date.getMonth() + 1 === m.month && a.np), "np"));
+
+  const layout = baseLayout();
+  layout.xaxis.type = "category";
+  layout.barmode = "group";
+  layout.showlegend = true;
+  layout.legend = { orientation: "h", y: -0.18, font: { color: c.muted, size: 11 } };
+  Plotly.react(el, [
+    { type: "bar", x: months12.map((m) => m.label), y: avgPw, name: t("avgPower"),
+      marker: { color: c.past, cornerradius: 8 }, hovertemplate: "<b>%{x}</b><br>%{y:.0f} W<extra></extra>" },
+    { type: "bar", x: months12.map((m) => m.label), y: avgNp, name: t("normPower"),
+      marker: { color: c.accent, cornerradius: 8 }, hovertemplate: "<b>%{x}</b><br>%{y:.0f} W<extra></extra>" },
+  ], layout, plotConfig);
 }
 
 function yearRange(list) {
@@ -525,6 +663,152 @@ function cumChart(el, years, list, key, unit, dec) {
                                           xshift: 4, font: { size: 11, color: e.color } }));
   layout.hovermode = "closest";
   Plotly.react(el, traces, layout, plotConfig);
+}
+
+function wellnessLineFig(el, points, yKey, color, unit, dec = 0) {
+  const pts = (points || []).filter((p) => p[yKey] != null);
+  const layout = baseLayout();
+  layout.xaxis = { ...layout.xaxis, type: "date" };
+  if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
+  Plotly.react(el, [{
+    type: "scatter", mode: "lines+markers", x: pts.map((p) => p.d), y: pts.map((p) => p[yKey]),
+    line: { color, width: 2.5 }, marker: { size: 4, color },
+    hovertemplate: `%{x}<br><b>%{y:.${dec}f} ${unit}</b><extra></extra>`,
+  }], layout, plotConfig);
+}
+function vo2maxChart(el, key) {
+  wellnessLineFig(el, state.wellness?.vo2max, key, colors().accent, "ml/kg/min", 1);
+}
+function ftpChart(el) {
+  wellnessLineFig(el, state.wellness?.ftp, "ftp", colors().accent, "W", 0);
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña Entrenamiento
+// ---------------------------------------------------------------------------
+const STATUS_COLORS = {
+  PRODUCTIVE: "#6BCB77", PEAKING: "#4D96FF", MAINTAINING: "#FFA630", BALANCED: "#FFA630",
+  OVERREACHING: "#FF6B6B", RECOVERY: "#FFD93D", DETRAINING: "#FF924C", UNPRODUCTIVE: "#FF6B6B",
+  NO_STATUS: "#6b7280",
+};
+function statusColor(phrase) {
+  return STATUS_COLORS[(phrase || "").toUpperCase().replace(/\s+/g, "_")] || "#6b7280";
+}
+function statusLabel(phrase) {
+  if (!phrase) return "—";
+  return phrase.charAt(0) + phrase.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
+function acuteLoadChart(el, points) {
+  const c = colors();
+  const pts = (points || []).filter((p) => p.acute != null);
+  const layout = baseLayout();
+  layout.xaxis = { ...layout.xaxis, type: "date" };
+  layout.showlegend = true;
+  layout.legend = { orientation: "h", y: -0.18, font: { color: c.muted, size: 11 } };
+  if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
+  const haveBand = pts.some((p) => p.lo != null && p.hi != null);
+  const traces = [];
+  if (haveBand) {
+    traces.push({ type: "scatter", mode: "lines", x: pts.map((p) => p.d), y: pts.map((p) => p.hi),
+                  line: { width: 0 }, showlegend: false, hoverinfo: "skip" });
+    traces.push({ type: "scatter", mode: "lines", x: pts.map((p) => p.d), y: pts.map((p) => p.lo),
+                  line: { width: 0 }, fill: "tonexty", fillcolor: "rgba(107,203,119,0.25)",
+                  name: t("optimalRange"), hoverinfo: "skip" });
+  }
+  traces.push({ type: "scatter", mode: "lines+markers", x: pts.map((p) => p.d), y: pts.map((p) => p.acute),
+                line: { color: c.text, width: 2 }, marker: { size: 5, color: c.text },
+                name: t("acuteLoad"), hovertemplate: "%{x}<br><b>%{y:.0f}</b><extra></extra>" });
+  Plotly.react(el, traces, layout, plotConfig);
+}
+
+function weeklyBarFig(el, points, key, color, unit) {
+  const c = colors();
+  const pts = points || [];
+  const layout = baseLayout();
+  layout.xaxis = { ...layout.xaxis, type: "date" };
+  if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
+  Plotly.react(el, [{
+    type: "bar", x: pts.map((p) => p.d), y: pts.map((p) => p[key]),
+    marker: { color, cornerradius: 6 },
+    hovertemplate: `%{x}<br><b>%{y:,.0f} ${unit}</b><extra></extra>`,
+  }], layout, plotConfig);
+}
+
+function renderTraining() {
+  const panel = $("panel-training");
+  const w = state.wellness;
+  if (!w) { panel.innerHTML = `<div class="empty">${t("noWellness")}</div>`; return; }
+
+  const ts = w.training_status || {};
+  const color = statusColor(ts.phrase);
+  const last4w = state.acts.filter((a) => a.date >= new Date(today - 28 * 86400000));
+  const elev4w = sum(last4w, "elev");
+  const hrs = state.acts.map((a) => a.hr).filter(Boolean);
+  const avgHr = hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null;
+
+  panel.innerHTML = `
+    <div class="status-card">
+      <div>
+        <div class="phrase" style="color:${color}">${statusLabel(ts.phrase)}</div>
+        <div class="subtle">${t("loadLabel")} — ${statusLabel(ts.loadFocus) || "—"}</div>
+        <div class="subtle">⛰ ${fmt(elev4w)} m — ${t("elev4w")}</div>
+      </div>
+      <div class="side-metrics">
+        <div><div class="m-val">${w.vo2max_category || "—"}</div><div class="m-lbl">${t("vo2maxLabel")}</div></div>
+        <div><div class="m-val">${statusLabel(ts.hrvStatus) || "—"}</div><div class="m-lbl">${t("hrvLabel")}</div></div>
+        <div><div class="m-val">${avgHr ? avgHr + " bpm" : "—"}</div><div class="m-lbl">${t("avgHrAll")}</div></div>
+      </div>
+    </div>
+
+    <h2 class="section-title">${t("acuteLoad")}</h2>
+    <div class="chart-card wide"><div class="chart" id="load-chart"></div></div>
+
+    <h2 class="section-title">${t("intensityMinutes")}</h2>
+    <div class="chart-card wide"><div class="chart" id="intensity-chart"></div></div>
+
+    <div class="grid-3" style="margin-top:16px">
+      <div class="chart-card"><h3>${t("vo2maxCycling")}</h3><div class="chart" id="t-vo2-bike"></div></div>
+      <div class="chart-card"><h3>${t("vo2maxRunning")}</h3><div class="chart" id="t-vo2-run"></div></div>
+    </div>`;
+
+  acuteLoadChart("load-chart", w.training_load);
+  weeklyBarFig("intensity-chart", w.intensity_minutes, "min", colors().accent, "min");
+  vo2maxChart("t-vo2-bike", "bike");
+  vo2maxChart("t-vo2-run", "run");
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña Salud
+// ---------------------------------------------------------------------------
+function renderHealth() {
+  const panel = $("panel-health");
+  const w = state.wellness;
+  if (!w) { panel.innerHTML = `<div class="empty">${t("noWellness")}</div>`; return; }
+
+  const sleepVals = (w.sleep || []).map((p) => p.h).filter(Boolean);
+  const avgSleep = sleepVals.length ? sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length : null;
+  const stepsVals = (w.steps_weekly || []).map((p) => p.steps).filter(Boolean);
+  const avgSteps = stepsVals.length ? stepsVals.reduce((a, b) => a + b, 0) / stepsVals.length : null;
+  const stressVals = (w.stress_weekly || []).map((p) => p.stress).filter((v) => v != null);
+  const avgStress = stressVals.length ? stressVals.reduce((a, b) => a + b, 0) / stressVals.length : null;
+
+  panel.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="label">${t("avgSleep")}</div><div class="value">${avgSleep ? fmt(avgSleep, 1) : "—"}<small>h</small></div></div>
+      <div class="kpi"><div class="label">${t("stepsPerWeek")}</div><div class="value">${avgSteps ? fmt(avgSteps) : "—"}</div></div>
+      <div class="kpi"><div class="label">${t("stressPerWeek")}</div><div class="value">${avgStress ? fmt(avgStress) : "—"}</div></div>
+    </div>
+    <h2 class="section-title">${t("avgSleep")}</h2>
+    <div class="chart-card wide"><div class="chart" id="sleep-chart"></div></div>
+    <h2 class="section-title">${t("stepsPerWeek")}</h2>
+    <div class="chart-card wide"><div class="chart" id="steps-chart"></div></div>
+    <h2 class="section-title">${t("stressPerWeek")}</h2>
+    <div class="chart-card wide"><div class="chart" id="stress-chart"></div></div>`;
+
+  wellnessLineFig("sleep-chart", w.sleep, "h", colors().accent, "h", 1);
+  weeklyBarFig("steps-chart", w.steps_weekly, "steps", colors().past, "steps");
+  weeklyBarFig("stress-chart", w.stress_weekly, "stress", colors().past, "");
 }
 
 function downloadCSV(list, filename) {
@@ -612,12 +896,52 @@ function addMsg(role, html, pending = false) {
   $("messages").scrollTop = $("messages").scrollHeight;
   return div;
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function callWithRetry(fetchOnce, pending) {
+  const delays = [0, 2000, 5000]; // 3 intentos: inmediato, +2s, +5s
+  let lastErr;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) {
+      pending.textContent = `${t("thinking")} (${t("retrying")})`;
+      await sleep(delays[i]);
+    }
+    const res = await fetchOnce();
+    if (res.ok) return res.json();
+    const text = await res.text();
+    lastErr = new Error(`HTTP ${res.status}: ${text}`);
+    if (res.status !== 503 && res.status !== 429) throw lastErr; // solo reintenta en saturación/rate-limit temporal
+  }
+  throw lastErr;
+}
+
+function callGemini(model, key, pending) {
+  return callWithRetry(() => fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt() }] }, contents: state.chat }) },
+  ), pending).then((data) => data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "—");
+}
+
+function callGroq(model, key, pending) {
+  const messages = [
+    { role: "system", content: systemPrompt() },
+    ...state.chat.map((m) => ({ role: m.role === "model" ? "assistant" : "user", content: m.parts[0].text })),
+  ];
+  return callWithRetry(() => fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model, messages }),
+  }), pending).then((data) => data?.choices?.[0]?.message?.content || "—");
+}
+
 async function ask(text) {
   text = text.trim();
   if (!text) return;
-  const key = store.get("gemini_key", "");
+  const provider = store.get("provider", "groq");
+  const key = store.get(`${provider}_key`, "");
   if (!key) { openSettings(); toast(t("needKey")); return; }
-  const model = store.get("gemini_model", DEFAULT_MODEL) || DEFAULT_MODEL;
+  const model = store.get(`${provider}_model`, "") || DEFAULT_MODELS[provider];
 
   $("chat-input").value = "";
   $("btn-send").disabled = true;
@@ -626,14 +950,7 @@ async function ask(text) {
   const pending = addMsg("model", t("thinking"), true);
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt() }] }, contents: state.chat }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "—";
+    const reply = provider === "groq" ? await callGroq(model, key, pending) : await callGemini(model, key, pending);
     pending.classList.remove("pending");
     pending.innerHTML = md(reply);
     state.chat.push({ role: "model", parts: [{ text: reply }] });
@@ -641,7 +958,7 @@ async function ask(text) {
     console.error(e);
     state.chat.pop();
     pending.classList.remove("pending");
-    pending.textContent = t("geminiError");
+    pending.textContent = (e.message.includes("503") || e.message.includes("429")) ? t("geminiBusy") : t("geminiError");
   } finally {
     $("btn-send").disabled = false;
     $("chat-input").focus();
@@ -671,7 +988,8 @@ async function triggerSync() {
   try {
     const started = Date.now();
     const res = await fetch(`${base}/dispatches`, {
-      method: "POST", headers: ghHeaders(token), body: JSON.stringify({ ref: REPO.ref }),
+      method: "POST", headers: ghHeaders(token),
+      body: JSON.stringify({ ref: REPO.ref, inputs: { scope: "activities" } }),
     });
     if (res.status !== 204) throw new Error(res.status);
     toast(t("syncStarted"), 8000);
@@ -702,15 +1020,26 @@ function pollRun(base, token, started) {
 // ---------------------------------------------------------------------------
 // Ajustes, tema, idioma, pestañas
 // ---------------------------------------------------------------------------
+function refreshProviderFields() {
+  const provider = $("s-provider").value;
+  $("s-key").value = store.get(`${provider}_key`, "");
+  $("s-model").value = store.get(`${provider}_model`, "");
+  $("s-model").placeholder = DEFAULT_MODELS[provider];
+  $("s-key-label").textContent = t(provider === "groq" ? "groqKey" : "geminiKey");
+  $("s-model-label").textContent = t("model");
+  $("s-provider-note").textContent = t(provider === "groq" ? "providerNoteGroq" : "providerNoteGemini");
+}
 function openSettings() {
-  $("s-gemini").value = store.get("gemini_key", "");
-  $("s-model").value = store.get("gemini_model", DEFAULT_MODEL);
+  $("s-provider").value = store.get("provider", "groq");
   $("s-gh").value = store.get("gh_token", "");
+  refreshProviderFields();
   $("settings").showModal();
 }
 function saveSettings() {
-  store.set("gemini_key", $("s-gemini").value.trim());
-  store.set("gemini_model", $("s-model").value.trim() || DEFAULT_MODEL);
+  const provider = $("s-provider").value;
+  store.set("provider", provider);
+  store.set(`${provider}_key`, $("s-key").value.trim());
+  store.set(`${provider}_model`, $("s-model").value.trim());
   store.set("gh_token", $("s-gh").value.trim());
   $("settings").close();
   toast(t("saved"));
@@ -724,10 +1053,13 @@ function applyStaticText() {
 function showTab(tab) {
   state.tab = tab;
   document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
-  const coach = tab === "coach";
-  $("panel-coach").hidden = !coach;
-  $("panel-sport").hidden = coach;
-  if (coach) renderGoalProgress();
+  $("panel-coach").hidden = tab !== "coach";
+  $("panel-training").hidden = tab !== "training";
+  $("panel-health").hidden = tab !== "health";
+  $("panel-sport").hidden = !["cycling", "running", "all"].includes(tab);
+  if (tab === "coach") renderGoalProgress();
+  else if (tab === "training") { if (state.data) renderTraining(); }
+  else if (tab === "health") { if (state.data) renderHealth(); }
   else if (state.data) renderSport(tab);
 }
 function renderAll() {
@@ -747,6 +1079,7 @@ $("btn-theme").onclick = () => {
   renderAll();
 };
 $("btn-settings").onclick = openSettings;
+$("s-provider").onchange = refreshProviderFields;
 $("s-close").onclick = () => $("settings").close();
 $("s-save").onclick = saveSettings;
 $("btn-sync").onclick = triggerSync;
