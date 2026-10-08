@@ -321,9 +321,37 @@ def mock_wellness():
 # Main
 # ---------------------------------------------------------------------------
 
+def debug_dump(client):
+    """Imprime la respuesta cruda de los 3 endpoints problemáticos, para
+    ajustar el parseo contra la forma real que usa esta cuenta/dispositivo.
+    No escribe ningún archivo."""
+    calls = {
+        "get_training_status(today)": lambda: client.get_training_status(TODAY.isoformat()),
+        "get_max_metrics(today)": lambda: client.get_max_metrics(TODAY.isoformat()),
+        "get_cycling_ftp()": lambda: client.get_cycling_ftp(),
+    }
+    for label, fn in calls.items():
+        print(f"\n{'=' * 20} {label} {'=' * 20}")
+        try:
+            print(json.dumps(fn(), indent=2, ensure_ascii=False, default=str))
+        except Exception as e:
+            print(f"ERROR: {e}")
+
+
 def main():
     use_garmin = os.environ.get("USE_GARMIN") == "1"
     only_activities = os.environ.get("ONLY_ACTIVITIES") == "1"
+    debug = os.environ.get("DEBUG_WELLNESS") == "1"
+
+    if debug:
+        if not use_garmin:
+            print("DEBUG_WELLNESS requiere USE_GARMIN=1")
+            return
+        from garminconnect import Garmin
+        client = Garmin(os.environ["GARMIN_EMAIL"], os.environ["GARMIN_PASSWORD"])
+        client.login()
+        debug_dump(client)
+        return
 
     if use_garmin:
         from garminconnect import Garmin
