@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
+    inputs:
+      scope:
+        description: "full (actividades + wellness) o activities (solo actividades, más rápido)"
+        default: "full"
 
 jobs:
   sync:
@@ -17,12 +21,13 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Descargar actividades
+      - name: Descargar datos
         run: python src/build_data.py
         env:
           USE_GARMIN: "1"
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          ONLY_ACTIVITIES: ${{ github.event.inputs.scope == 'activities' && '1' || '0' }}
 
       - name: Publicar cambios
         run: |
