@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garmin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --accent: #FF5A1F;
+    --accent-fill: rgba(255, 90, 31, 0.12);
+    --r-lg: 24px; --r-md: 16px; --r-sm: 10px;
+  }
+  [data-theme="dark"] {
+    --bg: #0f0f11; --card: #19191c; --card-2: #232327;
+    --text: #f3f3f3; --muted: #8d8d94; --line: #2b2b30; --past: #5a5a61;
+  }
+  [data-theme="light"] {
+    --bg: #ebebeb; --card: #ffffff; --card-2: #f3f3f3;
+    --text: #151515; --muted: #6c6c72; --line: #e3e3e3; --past: #c6c6ca;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: Urbanist, system-ui, -apple-system, Segoe UI, sans-serif; font-size: 15px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  .btn { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+         padding: 9px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  select.btn { appearance: none; padding-right: 14px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 32px; }
+  .kpi { background: var(--card); border-radius: var(--r-lg); padding: 22px 24px; }
+  .kpi .label { color: var(--muted); font-size: 14px; }
+  .kpi .value { font-size: 56px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; margin-top: 8px; }
+  .kpi .value small { font-size: 18px; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .kpi .delta { font-size: 13px; color: var(--accent); margin-top: 10px; min-height: 1em; }
+
+  .tabs { display: inline-flex; background: var(--card); border-radius: 999px; padding: 5px; gap: 4px;
+          margin-bottom: 24px; flex-wrap: wrap; }
+  .tab { border: 0; background: transparent; color: var(--muted); padding: 10px 20px;
+         border-radius: 999px; font-weight: 600; cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+
+  .section-title { font-size: 18px; font-weight: 600; margin: 32px 0 12px; }
+  .section-title span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 6px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .tile { background: var(--card); border-radius: var(--r-md); padding: 16px 18px; }
+  .tile .label { color: var(--muted); font-size: 13px; }
+  .tile .value { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+  .tile .value small { font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 3px; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .chart-card { background: var(--card); border-radius: var(--r-lg); padding: 18px 18px 8px; }
+  .chart-card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .chart-card .chart { height: 260px; }
+  .chart-card.wide { margin-bottom: 16px; }
+  .chart-card.wide .chart { height: 320px; }
+
+  .download-row { margin-top: 28px; display: flex; justify-content: flex-end; }
+  .empty { background: var(--card); border-radius: var(--r-lg); padding: 40px; color: var(--muted); text-align: center; }
+
+  .coach { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; align-items: start; }
+  .panel { background: var(--card); border-radius: var(--r-lg); padding: 20px; }
+  .panel h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .field label { font-size: 13px; color: var(--muted); }
+  .field input, .field textarea { background: var(--card-2); border: 1px solid var(--line);
+         border-radius: var(--r-sm); padding: 10px 12px; }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .progress { margin: 14px 0 4px; }
+  .progress .top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .progress .bar { height: 8px; background: var(--card-2); border-radius: 999px; margin-top: 6px; overflow: hidden; }
+  .progress .bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
+  #messages { height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .msg { padding: 10px 14px; border-radius: 14px; max-width: 88%; line-height: 1.5; font-size: 14px; }
+  .msg.user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.model { background: var(--card-2); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.model ul { margin: 6px 0; padding-left: 18px; }
+  .msg.pending { color: var(--muted); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .chip { background: var(--card-2); border: 1px solid var(--line); border-radius: 999px;
+          padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  .input-row { display: flex; gap: 8px; }
+  .input-row input { flex: 1; background: var(--card-2); border: 1px solid var(--line);
+                     border-radius: 999px; padding: 11px 16px; }
+
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line);
+           border-radius: var(--r-lg); padding: 24px; width: min(460px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.55); }
+  dialog p.note { color: var(--muted); font-size: 13px; margin: 4px 0 16px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+           background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px;
+           font-size: 14px; max-width: 90vw; display: none; z-index: 10; }
+
+  @media (max-width: 860px) {
+    .kpis, .grid-3, .coach { grid-template-columns: 1fr; }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .kpi .value { font-size: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1 id="athlete">—</h1>
+      <p id="synced"></p>
+    </div>
+    <div class="tools">
+      <button class="btn primary" id="btn-sync" data-i18n="refresh"></button>
+      <select class="btn" id="lang" aria-label="Language">
+        <option value="es">ES</option><option value="en">EN</option><option value="it">IT</option>
+      </select>
+      <button class="btn" id="btn-theme" aria-label="Theme">◐</button>
+      <button class="btn" id="btn-settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="cycling" data-i18n="cycling"></button>
+    <button class="tab" role="tab" data-tab="running" data-i18n="running"></button>
+    <button class="tab" role="tab" data-tab="all" data-i18n="all"></button>
+    <button class="tab" role="tab" data-tab="coach" data-i18n="coach"></button>
+  </nav>
+
+  <main id="panel-sport"></main>
+
+  <main id="panel-coach" hidden>
+    <div class="coach">
+      <div class="panel">
+        <h2 data-i18n="goals"></h2>
+        <div class="row-2">
+          <div class="field"><label for="g-cyc-km" data-i18n="goalCycKm"></label><input id="g-cyc-km" type="number" min="0"></div>
+          <div class="field"><label for="g-run-km" data-i18n="goalRunKm"></label><input id="g-run-km" type="number" min="0"></div>
+          <div class="field"><label for="g-cyc-elev" data-i18n="goalCycElev"></label><input id="g-cyc-elev" type="number" min="0"></div>
+          <div class="field"><label for="g-hours" data-i18n="goalHours"></label><input id="g-hours" type="number" min="0"></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="g-event" data-i18n="goalEvent"></label><input id="g-event" type="text"></div>
+          <div class="field"><label for="g-date" data-i18n="goalDate"></label><input id="g-date" type="date"></div>
+        </div>
+        <div class="field"><label for="g-notes" data-i18n="goalNotes"></label><textarea id="g-notes"></textarea></div>
+        <button class="btn primary" id="btn-goals" data-i18n="saveGoals"></button>
+        <div id="goal-progress"></div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="coach"></h2>
+        <div id="messages"></div>
+        <div class="chips" id="chips"></div>
+        <div class="input-row">
+          <input id="chat-input" type="text">
+          <button class="btn primary" id="btn-send" data-i18n="send"></button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="settings">
+  <h2 data-i18n="settings" style="margin:0 0 4px;font-size:20px"></h2>
+  <p class="note" data-i18n="storedLocal"></p>
+  <div class="field"><label for="s-gemini" data-i18n="geminiKey"></label><input id="s-gemini" type="password" autocomplete="off"></div>
+  <div class="field"><label for="s-model" data-i18n="model"></label><input id="s-model" type="text"></div>
+  <div class="field"><label for="s-gh" data-i18n="ghToken"></label><input id="s-gh" type="password" autocomplete="off"></div>
+  <div class="dialog-actions">
+    <button class="btn" id="s-close" data-i18n="close"></button>
+    <button class="btn primary" id="s-save" data-i18n="save"></button>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Configuración
+// ---------------------------------------------------------------------------
+const REPO = { owner: "FedericoDaverio", repo: "garmin-dash", workflow: "garmin_sync.yml", ref: "main" };
+const DEFAULT_MODEL = "gemini-flash-latest";
+
+const I18N = {
+  es: {
+    locale: "es-MX", refresh: "Actualizar datos", synced: "Actualizado el {d}",
+    kpiActs: "Actividades en {y}", kpiKm: "Kilómetros en {y}", kpiHours: "Horas en {y}",
+    vsLast: "{v} vs {y} a la misma fecha",
+    cycling: "Ciclismo", running: "Carrera", all: "Todo", coach: "Coach IA",
+    lastActivity: "Última actividad", date: "Fecha", time: "Tiempo", hr: "FC media",
+    distance: "Distancia", elevation: "Desnivel", speed: "Velocidad media", pace: "Ritmo medio",
+    perYear: "Por año", kmYear: "Kilómetros", elevYear: "Desnivel", hoursYear: "Horas",
+    progression: "Progresión acumulada", avg: "Promedio",
+    avgNote: "La línea punteada es el promedio de los años completos.",
+    download: "Descargar CSV", noData: "Todavía no hay actividades de este tipo.",
+    goals: "Mis objetivos", goalCycKm: "Km de ciclismo en el año", goalRunKm: "Km de carrera en el año",
+    goalCycElev: "Desnivel de ciclismo (m)", goalHours: "Horas totales en el año",
+    goalEvent: "Evento principal", goalDate: "Fecha del evento", goalNotes: "Notas para el coach",
+    saveGoals: "Guardar objetivos", goalsSaved: "Objetivos guardados",
+    chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…",
+    chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
+    settings: "Ajustes", storedLocal: "Las claves se guardan solo en este navegador, nunca en el repositorio.",
+    geminiKey: "API key de Gemini", model: "Modelo de Gemini", ghToken: "Token de GitHub (para actualizar datos)",
+    save: "Guardar", close: "Cerrar", saved: "Ajustes guardados",
+    needToken: "Agrega tu token de GitHub en Ajustes para actualizar.",
+    needKey: "Agrega tu API key de Gemini en Ajustes.",
+    syncStarted: "Actualización iniciada. Tarda unos 2–3 minutos.",
+    syncDone: "Datos actualizados. La página se recarga en 1 minuto.",
+    syncFailed: "La actualización falló. Revisa la pestaña Actions en GitHub.",
+    syncError: "No se pudo iniciar la actualización",
+    geminiError: "Gemini no respondió. Revisa la API key y el modelo en Ajustes.",
+    loadError: "No se pudieron cargar los datos (data/activities.json).",
+    ofGoal: "de", answerLang: "español",
+    months: ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
+  },
+  en: {
+    locale: "en-US", refresh: "Refresh data", synced: "Updated {d}",
+    kpiActs: "Activities in {y}", kpiKm: "Kilometers in {y}", kpiHours: "Hours in {y}",
+    vsLast: "{v} vs {y} to date",
+    cycling: "Cycling", running: "Running", all: "All", coach: "AI Coach",
+    lastActivity: "Last activity", date: "Date", time: "Time", hr: "Avg HR",
+    distance: "Distance", elevation: "Elevation", speed: "Avg speed", pace: "Avg pace",
+    perYear: "Per year", kmYear: "Kilometers", elevYear: "Elevation", hoursYear: "Hours",
+    progression: "Cumulative progress", avg: "Average",
+    avgNote: "The dotted line is the average of complete years.",
+    download: "Download CSV", noData: "No activities of this type yet.",
+    goals: "My goals", goalCycKm: "Cycling km this year", goalRunKm: "Running km this year",
+    goalCycElev: "Cycling elevation (m)", goalHours: "Total hours this year",
+    goalEvent: "Main event", goalDate: "Event date", goalNotes: "Notes for the coach",
+    saveGoals: "Save goals", goalsSaved: "Goals saved",
+    chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…",
+    chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
+    settings: "Settings", storedLocal: "Keys are stored only in this browser, never in the repository.",
+    geminiKey: "Gemini API key", model: "Gemini model", ghToken: "GitHub token (to refresh data)",
+    save: "Save", close: "Close", saved: "Settings saved",
+    needToken: "Add your GitHub token in Settings to refresh.",
+    needKey: "Add your Gemini API key in Settings.",
+    syncStarted: "Refresh started. It takes about 2–3 minutes.",
+    syncDone: "Data updated. The page reloads in 1 minute.",
+    syncFailed: "The refresh failed. Check the Actions tab on GitHub.",
+    syncError: "Couldn't start the refresh",
+    geminiError: "Gemini didn't respond. Check the API key and model in Settings.",
+    loadError: "Couldn't load data (data/activities.json).",
+    ofGoal: "of", answerLang: "English",
+    months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+  },
+  it: {
+    locale: "it-IT", refresh: "Aggiorna dati", synced: "Aggiornato il {d}",
+    kpiActs: "Attività nel {y}", kpiKm: "Chilometri nel {y}", kpiHours: "Ore nel {y}",
+    vsLast: "{v} vs {y} alla stessa data",
+    cycling: "Ciclismo", running: "Corsa", all: "Tutto", coach: "Coach IA",
+    lastActivity: "Ultima attività", date: "Data", time: "Tempo", hr: "FC media",
+    distance: "Distanza", elevation: "Dislivello", speed: "Velocità media", pace: "Passo medio",
+    perYear: "Per anno", kmYear: "Chilometri", elevYear: "Dislivello", hoursYear: "Ore",
+    progression: "Progressione cumulativa", avg: "Media",
+    avgNote: "La linea tratteggiata è la media degli anni completi.",
+    download: "Scarica CSV", noData: "Ancora nessuna attività di questo tipo.",
+    goals: "I miei obiettivi", goalCycKm: "Km in bici nell'anno", goalRunKm: "Km di corsa nell'anno",
+    goalCycElev: "Dislivello in bici (m)", goalHours: "Ore totali nell'anno",
+    goalEvent: "Evento principale", goalDate: "Data dell'evento", goalNotes: "Note per il coach",
+    saveGoals: "Salva obiettivi", goalsSaved: "Obiettivi salvati",
+    chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…",
+    chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
+    settings: "Impostazioni", storedLocal: "Le chiavi restano solo in questo browser, mai nel repository.",
+    geminiKey: "Chiave API Gemini", model: "Modello Gemini", ghToken: "Token GitHub (per aggiornare i dati)",
+    save: "Salva", close: "Chiudi", saved: "Impostazioni salvate",
+    needToken: "Aggiungi il token GitHub nelle Impostazioni per aggiornare.",
+    needKey: "Aggiungi la chiave API Gemini nelle Impostazioni.",
+    syncStarted: "Aggiornamento avviato. Ci vogliono circa 2–3 minuti.",
+    syncDone: "Dati aggiornati. La pagina si ricarica tra 1 minuto.",
+    syncFailed: "L'aggiornamento non è riuscito. Controlla la scheda Actions su GitHub.",
+    syncError: "Impossibile avviare l'aggiornamento",
+    geminiError: "Gemini non ha risposto. Controlla chiave API e modello nelle Impostazioni.",
+    loadError: "Impossibile caricare i dati (data/activities.json).",
+    ofGoal: "di", answerLang: "italiano",
+    months: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Estado y utilidades
+// ---------------------------------------------------------------------------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const state = {
+  data: null, acts: [],
+  tab: "cycling",
+  lang: store.get("lang", "es"),
+  theme: store.get("theme", "dark"),
+  chat: [],
+};
+const $ = (id) => document.getElementById(id);
+const t = (k, vars = {}) => {
+  let s = (I18N[state.lang] || I18N.es)[k] ?? I18N.es[k] ?? k;
+  if (typeof s === "string") for (const [a, b] of Object.entries(vars)) s = s.replace(`{${a}}`, b);
+  return s;
+};
+const today = new Date();
+const CY = today.getFullYear();
+const fmt = (v, dec = 0) =>
+  v == null || isNaN(v) ? "—" : Number(v).toLocaleString(t("locale"), { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const doy = (d) => Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 864e5) + 1;
+const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function sportOf(type) {
+  if (/cycl|bik|ride|bmx/.test(type)) return "cycling";
+  if (/run/.test(type)) return "running";
+  return "other";
+}
+function listFor(tab) { return tab === "all" ? state.acts : state.acts.filter((a) => a.sport === tab); }
+function sum(list, key) { return list.reduce((s, a) => s + (a[key] || 0), 0); }
+function hm(hours) {
+  const m = Math.round(hours * 60);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
+function pace(a) {
+  if (!a.km || !a.h) return "—";
+  const secPerKm = (a.h * 3600) / a.km;
+  return `${Math.floor(secPerKm / 60)}:${String(Math.round(secPerKm % 60)).padStart(2, "0")}`;
+}
+function toast(msg, ms = 4500) {
+  const el = $("toast"); el.textContent = msg; el.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(() => (el.style.display = "none"), ms);
+}
+function colors() {
+  const cs = getComputedStyle(document.documentElement);
+  const g = (v) => cs.getPropertyValue(v).trim();
+  return { accent: g("--accent"), accentFill: g("--accent-fill"), text: g("--text"), muted: g("--muted"),
+           line: g("--line"), past: g("--past"), card: g("--card"), card2: g("--card-2") };
+}
+
+// ---------------------------------------------------------------------------
+// Datos
+// ---------------------------------------------------------------------------
+async function loadData() {
+  const res = await fetch("data/activities.json", { cache: "no-store" });
+  if (!res.ok) throw new Error(res.status);
+  const j = await res.json();
+  state.data = j;
+  state.acts = j.activities
+    .map((a) => {
+      const [y, m, d] = a.d.split("-").map(Number);
+      return { ...a, date: new Date(y, m - 1, d), year: y, sport: sportOf(a.t) };
+    })
+    .sort((a, b) => a.date - b.date);
+}
+
+// ---------------------------------------------------------------------------
+// Encabezado + KPIs
+// ---------------------------------------------------------------------------
+function renderHeader() {
+  $("athlete").textContent = state.data?.athlete || "Garmin Dashboard";
+  if (state.data?.generated) {
+    const d = new Date(state.data.generated);
+    $("synced").textContent = t("synced", {
+      d: d.toLocaleString(t("locale"), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+    });
+  }
+}
+
+function renderKpis() {
+  const cur = state.acts.filter((a) => a.year === CY);
+  const todayDoy = doy(today);
+  const prev = state.acts.filter((a) => a.year === CY - 1 && doy(a.date) <= todayDoy);
+  const items = [
+    { label: t("kpiActs", { y: CY }), v: cur.length, p: prev.length, dec: 0, unit: "" },
+    { label: t("kpiKm", { y: CY }), v: sum(cur, "km"), p: sum(prev, "km"), dec: 0, unit: "km" },
+    { label: t("kpiHours", { y: CY }), v: sum(cur, "h"), p: sum(prev, "h"), dec: 0, unit: "h" },
+  ];
+  $("kpis").innerHTML = items.map((k) => {
+    const diff = k.v - k.p;
+    const delta = prev.length || k.p
+      ? t("vsLast", { v: `${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff), k.dec)}${k.unit ? " " + k.unit : ""}`, y: CY - 1 })
+      : "";
+    return `<div class="kpi"><div class="label">${k.label}</div>
+      <div class="value">${fmt(k.v, k.dec)}${k.unit ? `<small>${k.unit}</small>` : ""}</div>
+      <div class="delta">${delta}</div></div>`;
+  }).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña de deporte
+// ---------------------------------------------------------------------------
+function renderSport(tab) {
+  const list = listFor(tab);
+  const panel = $("panel-sport");
+  if (!list.length) { panel.innerHTML = `<div class="empty">${t("noData")}</div>`; return; }
+
+  const last = list[list.length - 1];
+  const isRun = last.sport === "running";
+  const dateStr = last.date.toLocaleDateString(t("locale"), { day: "numeric", month: "short", year: "numeric" });
+  const tiles = [
+    { l: t("date"), v: dateStr },
+    { l: t("time"), v: hm(last.h) },
+    { l: t("hr"), v: last.hr ? fmt(last.hr) : "—", u: last.hr ? "bpm" : "" },
+    { l: t("distance"), v: fmt(last.km, 1), u: "km" },
+    { l: t("elevation"), v: fmt(last.elev), u: "m" },
+    isRun ? { l: t("pace"), v: pace(last), u: "/km" } : { l: t("speed"), v: fmt(last.spd, 1), u: "km/h" },
+  ];
+
+  panel.innerHTML = `
+    <h2 class="section-title">${t("lastActivity")}<span>${escapeHtml(last.n || "")}</span></h2>
+    <div class="tiles">${tiles.map((x) =>
+      `<div class="tile"><div class="label">${x.l}</div><div class="value">${x.v}${x.u ? `<small>${x.u}</small>` : ""}</div></div>`
+    ).join("")}</div>
+
+    <h2 class="section-title">${t("perYear")}<span>${t("avgNote")}</span></h2>
+    <div class="grid-3">
+      <div class="chart-card"><h3>${t("kmYear")}</h3><div class="chart" id="bar-km"></div></div>
+      <div class="chart-card"><h3>${t("elevYear")}</h3><div class="chart" id="bar-elev"></div></div>
+      <div class="chart-card"><h3>${t("hoursYear")}</h3><div class="chart" id="bar-h"></div></div>
+    </div>
+
+    <h2 class="section-title">${t("progression")}</h2>
+    <div class="chart-card wide"><h3>${t("kmYear")}</h3><div class="chart" id="cum-km"></div></div>
+    <div class="chart-card wide"><h3>${t("elevYear")}</h3><div class="chart" id="cum-elev"></div></div>
+    <div class="chart-card wide"><h3>${t("hoursYear")}</h3><div class="chart" id="cum-h"></div></div>
+
+    <div class="download-row"><button class="btn" id="btn-csv">⬇ ${t("download")}</button></div>`;
+
+  const years = yearRange(list);
+  barChart("bar-km", years, list, "km", "km", 0);
+  barChart("bar-elev", years, list, "elev", "m", 0);
+  barChart("bar-h", years, list, "h", "h", 0);
+  cumChart("cum-km", years, list, "km", "km", 0);
+  cumChart("cum-elev", years, list, "elev", "m", 0);
+  cumChart("cum-h", years, list, "h", "h", 1);
+
+  $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
+}
+
+function yearRange(list) {
+  const first = list[0].year;
+  return Array.from({ length: CY - first + 1 }, (_, i) => first + i);
+}
+
+function baseLayout() {
+  const c = colors();
+  return {
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "Urbanist, sans-serif", color: c.muted, size: 12 },
+    margin: { l: 48, r: 14, t: 16, b: 32 },
+    xaxis: { showgrid: false, zeroline: false, linecolor: c.line, fixedrange: true },
+    yaxis: { gridcolor: c.line, zeroline: false, fixedrange: true, rangemode: "tozero" },
+    hoverlabel: { bgcolor: c.card2, bordercolor: c.accent, font: { color: c.text, family: "Urbanist, sans-serif", size: 13 } },
+    showlegend: false, bargap: 0.38,
+  };
+}
+const plotConfig = { displayModeBar: false, responsive: true };
+
+function barChart(el, years, list, key, unit, dec) {
+  const c = colors();
+  const totals = years.map((y) => sum(list.filter((a) => a.year === y), key));
+  const complete = totals.filter((_, i) => years[i] !== CY);
+  const avg = complete.length ? complete.reduce((a, b) => a + b, 0) / complete.length : null;
+
+  const layout = baseLayout();
+  layout.xaxis.type = "category";
+  if (avg !== null) {
+    layout.shapes = [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: avg, y1: avg,
+                       line: { color: c.text, width: 1.5, dash: "dot" } }];
+    layout.annotations = [{ xref: "paper", x: 0, y: avg, xanchor: "left", yanchor: "bottom", showarrow: false,
+                            text: `${t("avg")} ${fmt(avg, dec)} ${unit}`, font: { size: 11, color: c.text } }];
+  }
+  Plotly.react(el, [{
+    type: "bar", x: years.map(String), y: totals,
+    marker: { color: years.map((y) => (y === CY ? c.accent : c.past)), cornerradius: 8 },
+    hovertemplate: `<b>%{x}</b><br>%{y:,.${dec}f} ${unit}<extra></extra>`,
+  }], layout, plotConfig);
+}
+
+function cumChart(el, years, list, key, unit, dec) {
+  const c = colors();
+  const months = t("months");
+  const traces = [], ends = [];
+  years.forEach((y, idx) => {
+    const daily = new Array(368).fill(0);
+    list.filter((a) => a.year === y).forEach((a) => (daily[doy(a.date)] += a[key] || 0));
+    const len = y === CY ? doy(today) : isLeap(y) ? 366 : 365;
+    const xs = [], ys = [], cd = [];
+    let s = 0;
+    for (let d = 1; d <= len; d++) {
+      s += daily[d];
+      const dt = new Date(y, 0, d);
+      xs.push(d); ys.push(s); cd.push(`${dt.getDate()} ${months[dt.getMonth()]} ${y}`);
+    }
+    const isCur = y === CY;
+    const age = years.length - 1 - idx;
+    traces.push({
+      type: "scatter", mode: "lines", x: xs, y: ys, customdata: cd, name: String(y),
+      line: { color: isCur ? c.accent : c.past, width: isCur ? 3 : 1.6 },
+      opacity: isCur ? 1 : Math.max(0.35, 1 - age * 0.18),
+      fill: isCur ? "tozeroy" : "none", fillcolor: c.accentFill,
+      hovertemplate: `%{customdata}<br><b>%{y:,.${dec}f} ${unit}</b><extra></extra>`,
+    });
+    ends.push({ x: len, y: s, text: String(y), color: isCur ? c.accent : c.muted });
+  });
+  // años pasados primero, año actual encima
+  traces.push(traces.splice(traces.length - 1, 1)[0]);
+
+  const layout = baseLayout();
+  layout.margin.r = 48;
+  const monthStarts = Array.from({ length: 12 }, (_, m) => doy(new Date(2001, m, 1)));
+  layout.xaxis = { ...layout.xaxis, range: [1, 372], tickvals: monthStarts, ticktext: months };
+  layout.annotations = ends.map((e) => ({ x: e.x, y: e.y, text: e.text, xanchor: "left", showarrow: false,
+                                          xshift: 4, font: { size: 11, color: e.color } }));
+  layout.hovermode = "closest";
+  Plotly.react(el, traces, layout, plotConfig);
+}
+
+function downloadCSV(list, filename) {
+  const head = ["date", "sport", "type", "name", "distance_km", "elevation_m", "duration_h", "avg_hr", "avg_speed_kmh"];
+  const esc = (v) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = list.map((a) => [a.d, a.sport, a.t, a.n, a.km, a.elev, a.h, a.hr, a.spd].map(esc).join(","));
+  const blob = new Blob(["\ufeff" + head.join(",") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Objetivos
+// ---------------------------------------------------------------------------
+const GOAL_FIELDS = { cycKm: "g-cyc-km", runKm: "g-run-km", cycElev: "g-cyc-elev", hours: "g-hours",
+                      event: "g-event", date: "g-date", notes: "g-notes" };
+function getGoals() { try { return JSON.parse(store.get("goals", "{}")); } catch { return {}; } }
+function fillGoals() {
+  const g = getGoals();
+  for (const [k, id] of Object.entries(GOAL_FIELDS)) $(id).value = g[k] ?? "";
+  renderGoalProgress();
+}
+function saveGoals() {
+  const g = {};
+  for (const [k, id] of Object.entries(GOAL_FIELDS)) g[k] = $(id).value;
+  store.set("goals", JSON.stringify(g));
+  renderGoalProgress();
+  toast(t("goalsSaved"));
+}
+function ytd(sport, key) {
+  return sum(state.acts.filter((a) => a.year === CY && (sport === "all" || a.sport === sport)), key);
+}
+function renderGoalProgress() {
+  const g = getGoals();
+  const rows = [
+    { label: t("goalCycKm"), cur: ytd("cycling", "km"), goal: +g.cycKm, unit: "km" },
+    { label: t("goalRunKm"), cur: ytd("running", "km"), goal: +g.runKm, unit: "km" },
+    { label: t("goalCycElev"), cur: ytd("cycling", "elev"), goal: +g.cycElev, unit: "m" },
+    { label: t("goalHours"), cur: ytd("all", "h"), goal: +g.hours, unit: "h" },
+  ].filter((r) => r.goal > 0);
+  $("goal-progress").innerHTML = rows.map((r) => {
+    const pct = Math.min(100, (r.cur / r.goal) * 100);
+    return `<div class="progress"><div class="top"><span>${r.label}</span>
+      <span>${fmt(r.cur)} ${t("ofGoal")} ${fmt(r.goal)} ${r.unit}</span></div>
+      <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div></div>`;
+  }).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Coach IA (Gemini)
+// ---------------------------------------------------------------------------
+function activitiesCsv() {
+  const rows = state.acts.map((a) =>
+    [a.d, a.sport, a.t, a.km, a.elev, a.h, a.hr ?? "", a.spd ?? ""].join(","));
+  return "date,sport,type,km,elev_m,hours,avg_hr,avg_kmh\n" + rows.join("\n");
+}
+function systemPrompt() {
+  return [
+    `You are an experienced endurance coach (cycling and running). Answer in ${t("answerLang")}.`,
+    `Be concise and concrete: short paragraphs or short bullet lists, use the athlete's real numbers.`,
+    `Today is ${today.toISOString().slice(0, 10)}. Athlete: ${state.data?.athlete || "unknown"}.`,
+    `Athlete goals (JSON, empty fields mean not set): ${JSON.stringify(getGoals())}`,
+    `Complete activity history (CSV):\n${activitiesCsv()}`,
+  ].join("\n\n");
+}
+function md(text) {
+  const lines = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").split("\n");
+  let html = "", inList = false;
+  for (const line of lines) {
+    const m = line.match(/^\s*[-*]\s+(.*)/);
+    if (m) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${m[1]}</li>`; continue; }
+    if (inList) { html += "</ul>"; inList = false; }
+    html += line.trim() ? `<p style="margin:4px 0">${line}</p>` : "";
+  }
+  return html + (inList ? "</ul>" : "");
+}
+function addMsg(role, html, pending = false) {
+  const div = document.createElement("div");
+  div.className = `msg ${role}${pending ? " pending" : ""}`;
+  div.innerHTML = html;
+  $("messages").appendChild(div);
+  $("messages").scrollTop = $("messages").scrollHeight;
+  return div;
+}
+async function ask(text) {
+  text = text.trim();
+  if (!text) return;
+  const key = store.get("gemini_key", "");
+  if (!key) { openSettings(); toast(t("needKey")); return; }
+  const model = store.get("gemini_model", DEFAULT_MODEL) || DEFAULT_MODEL;
+
+  $("chat-input").value = "";
+  $("btn-send").disabled = true;
+  addMsg("user", escapeHtml(text));
+  state.chat.push({ role: "user", parts: [{ text }] });
+  const pending = addMsg("model", t("thinking"), true);
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt() }] }, contents: state.chat }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "—";
+    pending.classList.remove("pending");
+    pending.innerHTML = md(reply);
+    state.chat.push({ role: "model", parts: [{ text: reply }] });
+  } catch (e) {
+    console.error(e);
+    state.chat.pop();
+    pending.classList.remove("pending");
+    pending.textContent = t("geminiError");
+  } finally {
+    $("btn-send").disabled = false;
+    $("chat-input").focus();
+  }
+}
+function renderChips() {
+  $("chips").innerHTML = "";
+  t("chips").forEach((c) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = c; b.onclick = () => ask(c);
+    $("chips").appendChild(b);
+  });
+  $("chat-input").placeholder = t("chatPlaceholder");
+}
+
+// ---------------------------------------------------------------------------
+// Actualizar datos (dispara GitHub Actions)
+// ---------------------------------------------------------------------------
+function ghHeaders(token) {
+  return { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" };
+}
+async function triggerSync() {
+  const token = store.get("gh_token", "");
+  if (!token) { openSettings(); toast(t("needToken")); return; }
+  const base = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/actions/workflows/${REPO.workflow}`;
+  $("btn-sync").disabled = true;
+  try {
+    const started = Date.now();
+    const res = await fetch(`${base}/dispatches`, {
+      method: "POST", headers: ghHeaders(token), body: JSON.stringify({ ref: REPO.ref }),
+    });
+    if (res.status !== 204) throw new Error(res.status);
+    toast(t("syncStarted"), 8000);
+    pollRun(base, token, started);
+  } catch (e) {
+    toast(`${t("syncError")} (${e.message})`);
+    $("btn-sync").disabled = false;
+  }
+}
+function pollRun(base, token, started) {
+  const check = async () => {
+    try {
+      const res = await fetch(`${base}/runs?per_page=1&event=workflow_dispatch`, { headers: ghHeaders(token) });
+      const run = (await res.json()).workflow_runs?.[0];
+      if (run && new Date(run.created_at).getTime() >= started - 60000 && run.status === "completed") {
+        $("btn-sync").disabled = false;
+        if (run.conclusion === "success") { toast(t("syncDone"), 60000); setTimeout(() => location.reload(), 60000); }
+        else toast(t("syncFailed"), 10000);
+        return;
+      }
+    } catch {}
+    if (Date.now() - started < 15 * 60000) setTimeout(check, 15000);
+    else $("btn-sync").disabled = false;
+  };
+  setTimeout(check, 15000);
+}
+
+// ---------------------------------------------------------------------------
+// Ajustes, tema, idioma, pestañas
+// ---------------------------------------------------------------------------
+function openSettings() {
+  $("s-gemini").value = store.get("gemini_key", "");
+  $("s-model").value = store.get("gemini_model", DEFAULT_MODEL);
+  $("s-gh").value = store.get("gh_token", "");
+  $("settings").showModal();
+}
+function saveSettings() {
+  store.set("gemini_key", $("s-gemini").value.trim());
+  store.set("gemini_model", $("s-model").value.trim() || DEFAULT_MODEL);
+  store.set("gh_token", $("s-gh").value.trim());
+  $("settings").close();
+  toast(t("saved"));
+}
+function applyStaticText() {
+  document.documentElement.lang = state.lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+  $("lang").value = state.lang;
+  renderChips();
+}
+function showTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  const coach = tab === "coach";
+  $("panel-coach").hidden = !coach;
+  $("panel-sport").hidden = coach;
+  if (coach) renderGoalProgress();
+  else if (state.data) renderSport(tab);
+}
+function renderAll() {
+  applyStaticText();
+  if (!state.data) return;
+  renderHeader();
+  renderKpis();
+  showTab(state.tab);
+}
+
+document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+$("lang").onchange = (e) => { state.lang = e.target.value; store.set("lang", state.lang); renderAll(); };
+$("btn-theme").onclick = () => {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  store.set("theme", state.theme);
+  document.documentElement.dataset.theme = state.theme;
+  renderAll();
+};
+$("btn-settings").onclick = openSettings;
+$("s-close").onclick = () => $("settings").close();
+$("s-save").onclick = saveSettings;
+$("btn-sync").onclick = triggerSync;
+$("btn-goals").onclick = saveGoals;
+$("btn-send").onclick = () => ask($("chat-input").value);
+$("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") ask($("chat-input").value); });
+
+document.documentElement.dataset.theme = state.theme;
+applyStaticText();
+fillGoals();
+showTab("cycling");
+loadData()
+  .then(() => { renderAll(); renderGoalProgress(); })
+  .catch(() => { $("panel-sport").innerHTML = `<div class="empty">${t("loadError")}</div>`; });
+</script>
+</body>
+</html>
