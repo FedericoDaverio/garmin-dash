@@ -17,23 +17,13 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Crear carpetas de salida
-        run: mkdir -p docs data
+      - name: Descargar actividades
+        run: python src/build_data.py
+        env:
+          USE_GARMIN: "1"
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
 
-      - name: Generar estado de entrenamiento
-        run: python src/build_training_status.py
-        env:
-          USE_GARMIN: "1"
-          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
-          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
-      
-      - name: Generar totales anuales
-        run: python src/build_yearly_totals.py
-        env:
-          USE_GARMIN: "1"
-          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
-          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
-          
       - name: Publicar cambios
         run: |
           git config user.name "github-actions"
