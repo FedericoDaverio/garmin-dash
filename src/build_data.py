@@ -136,40 +136,38 @@ def mock_activities():
 def fetch_training_load(client, candidate_dates, max_calls=120):
     """Garmin solo recalcula el training status/load los días en que hubo
     actividad — pedirlo para fechas arbitrarias casi siempre da null. Por
-    eso se consulta en los días reales de actividad (más recientes primero)."""
+    eso se consulta en los días reales de actividad (más recientes primero).
+    La carga aguda/crónica y su rango óptimo vienen de
+    mostRecentTrainingStatus.latestTrainingStatusData.<deviceId>.acuteTrainingLoadDTO
+    (confirmado contra la cuenta real — "mostRecentTrainingLoadBalance" es
+    una métrica distinta, el balance aeróbico/anaeróbico mensual)."""
     points, latest = [], {}
-    for i, d in enumerate(candidate_dates[:max_calls]):
+    for d in candidate_dates[:max_calls]:
         try:
             data = client.get_training_status(d)
         except Exception:
             continue
         if not data:
             continue
-        balance = safe_path(data, "mostRecentTrainingLoadBalance") or {}
-        balance_block = first_device_block(balance.get("metricsTrainingLoadBalanceDTOMap", {})) or balance
-        acute = safe_path(balance_block, "monthlyLoadAerobicLow") or safe_path(balance_block, "acuteTrainingLoad") \
-            or safe_path(data, "dailyTrainingLoadAcute")
-        chronic = safe_path(balance_block, "chronicTrainingLoad") or safe_path(data, "dailyTrainingLoadChronic")
-        lo = safe_path(balance_block, "minTrainingLoadAcute")
-        hi = safe_path(balance_block, "maxTrainingLoadAcute")
         status = safe_path(data, "mostRecentTrainingStatus") or {}
-        status_block = first_device_block(status.get("latestTrainingStatusData", {})) or status
-        phrase = safe_path(status_block, "trainingStatusFeedbackPhrase") or safe_path(status, "trainingStatusFeedbackPhrase")
-        if acute is None and chronic is None and phrase is None:
-            continue
+        status_block = first_device_block(status.get("latestTrainingStatusData", {}))
+        load_dto = safe_path(status_block, "acuteTrainingLoadDTO") or {}
+        acute = load_dto.get("dailyTrainingLoadAcute")
+        chronic = load_dto.get("dailyTrainingLoadChronic")
+        lo = load_dto.get("minTrainingLoadChronic")
+        hi = load_dto.get("maxTrainingLoadChronic")
+        phrase = status_block.get("trainingStatusFeedbackPhrase")
         if acute is not None or chronic is not None:
             points.append({"d": d, "acute": acute, "chronic": chronic, "lo": lo, "hi": hi})
-        if i == 0 or not latest:
+        if not latest and (phrase or acute is not None):
+            balance = safe_path(data, "mostRecentTrainingLoadBalance") or {}
+            balance_block = first_device_block(balance.get("metricsTrainingLoadBalanceDTOMap", {}))
             latest = {
-                "phrase": phrase,
-                "loadFocus": safe_path(balance, "trainingBalanceFeedbackPhrase"),
-                "hrvStatus": safe_path(data, "hrvStatus") or safe_path(data, "mostRecentVO2Max", "hrvStatus"),
+                "phrase": None if phrase in ("NO_STATUS", "NO_STATUS_1", "NO_STATUS_2") else phrase,
+                "loadFocus": balance_block.get("trainingBalanceFeedbackPhrase"),
+                "hrvStatus": safe_path(data, "hrvStatus"),
             }
     points.sort(key=lambda p: p["d"])
-    # banda óptima aproximada cuando Garmin no la expone: ACWR 0.8–1.3 sobre la carga crónica
-    for p in points:
-        if (p["lo"] is None or p["hi"] is None) and p.get("chronic"):
-            p["lo"], p["hi"] = round(p["chronic"] * 0.8), round(p["chronic"] * 1.3)
     return points, latest
 
 
@@ -237,7 +235,7 @@ def fetch_sleep(client, days=90):
 
 def fetch_weekly_steps(client):
     try:
-        data = client.get_weekly_steps()
+        data = client.get_weekly_steps(TODAY.isoformat())
     except Exception:
         return []
     if not isinstance(data, list):
@@ -254,7 +252,7 @@ def fetch_weekly_steps(client):
 
 def fetch_weekly_stress(client):
     try:
-        data = client.get_weekly_stress()
+        data = client.get_weekly_stress(TODAY.isoformat())
     except Exception:
         return []
     if not isinstance(data, list):
@@ -278,10 +276,12 @@ def fetch_intensity_minutes(client, weeks=52):
     out = []
     if isinstance(data, list):
         for w in data:
-            d = w.get("calendarDate") or w.get("weekStart") or w.get("date")
-            mins = w.get("weeklyGoalMinutes") or w.get("moderateValue") or w.get("totalMinutes")
-            if d and mins is not None:
-                out.append({"d": str(d)[:10], "min": mins})
+            d = w.get("calendarDate")
+            moderate = w.get("moderateValue") or 0
+            vigorous = w.get("vigorousValue") or 0
+            if d:
+                # Garmin cuenta minutos vigorosos doble para la meta de intensidad semanal
+                out.append({"d": str(d)[:10], "min": moderate + vigorous * 2, "goal": w.get("weeklyGoal")})
     out.sort(key=lambda p: p["d"])
     return out
 
