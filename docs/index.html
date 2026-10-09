@@ -562,9 +562,10 @@ function renderSport(tab) {
     if (isCycling) {
       const lastFtp = (state.wellness?.ftp || []).at(-1);
       const ftpDateStr = lastFtp ? new Date(lastFtp.d).toLocaleDateString(t("locale"), { day: "numeric", month: "short", year: "numeric" }) : "";
-      wellnessSections += `<h2 class="section-title">FTP<span>${t("ftpNote")}</span></h2>
-        <div class="tile" style="max-width:220px"><div class="label">${ftpDateStr || "—"}</div>
-        <div class="value">${lastFtp ? fmt(lastFtp.ftp) : "—"}<small>W</small></div></div>`;
+      wellnessSections += `<h2 class="section-title">FTP</h2>
+        <div class="tile" style="max-width:220px;margin-bottom:12px"><div class="label">${ftpDateStr || "—"}</div>
+        <div class="value">${lastFtp ? fmt(lastFtp.ftp) : "—"}<small>W</small></div></div>
+        ${(state.wellness?.ftp || []).length > 1 ? `<div class="chart-card wide"><div class="chart" id="ftp-chart"></div></div>` : ""}`;
     }
   }
 
@@ -604,6 +605,10 @@ function renderSport(tab) {
 
   if (isCycling) monthlyPowerBarChart("bar-pw", list);
   if (isCycling || isRunning) vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
+  if (isCycling && $("ftp-chart")) {
+    wellnessLineFig("ftp-chart", state.wellness.ftp, "ftp", colors().accent, "W", 0);
+    Plotly.relayout("ftp-chart", { "yaxis.rangemode": "normal" });
+  }
 
   $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
 }
@@ -798,7 +803,7 @@ function renderTraining() {
       </div>
       <div class="side-metrics">
         <div><div class="m-val">${w.vo2max_category || "—"}</div><div class="m-lbl">${t("vo2maxLabel")}</div></div>
-        <div><div class="m-val">${statusLabel(ts.hrvStatus) || "—"}</div><div class="m-lbl">${t("hrvLabel")}</div></div>
+        <div><div class="m-val">${statusLabel(ts.hrvStatus || w.hrv?.status) || "—"}</div><div class="m-lbl">${t("hrvLabel")}${w.hrv?.weeklyAvg ? ` · ${w.hrv.weeklyAvg} ms` : ""}</div></div>
         <div><div class="m-val">${avgHr ? avgHr + " bpm" : "—"}</div><div class="m-lbl">${t("avgHrAll")}</div></div>
       </div>
     </div>
