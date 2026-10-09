@@ -207,15 +207,49 @@ def fetch_vo2max(client, run_dates, bike_dates):
 
 
 def fetch_ftp(client):
+    """Histórico de FTP: mismo endpoint que usa la gráfica de Garmin Connect web
+    (Performance Stats > FTP). Si falla, cae al valor vigente."""
+    start = (TODAY - timedelta(days=730)).isoformat()
+    path = f"/biometric-service/stats/functionalThresholdPower/range/{start}/{TODAY.isoformat()}"
+    points = []
     try:
-        data = client.get_cycling_ftp()
+        data = client.connectapi(path, params={
+            "sport": "CYCLING", "aggregation": "daily", "aggregationStrategy": "LATEST"})
+    except Exception as e:
+        print(f"FTP histórico no disponible: {e}")
+        data = None
+    if isinstance(data, list):
+        for e in data:
+            d = str(e.get("from") or e.get("calendarDate") or "")[:10]
+            v = e.get("value") or e.get("functionalThresholdPower")
+            if d and v:
+                points.append({"d": d, "ftp": round(v)})
+    if points:
+        return sorted(points, key=lambda p: p["d"])
+    try:
+        cur = client.get_cycling_ftp()
     except Exception:
         return []
-    if not isinstance(data, dict):
+    if not isinstance(cur, dict) or not cur.get("functionalThresholdPower"):
         return []
-    v = data.get("functionalThresholdPower")
-    d = (data.get("calendarDate") or "")[:10] or TODAY.isoformat()
-    return [{"d": d, "ftp": v}] if v else []
+    return [{"d": (cur.get("calendarDate") or "")[:10] or TODAY.isoformat(),
+             "ftp": cur["functionalThresholdPower"]}]
+
+
+def fetch_hrv_status(client, days_back=7):
+    """Estado HRV (BALANCED, UNBALANCED, LOW...). Requiere un reloj con HRV;
+    el Edge 540 no lo mide. Prueba los últimos días hasta encontrar uno."""
+    for i in range(days_back):
+        d = (TODAY - timedelta(days=i)).isoformat()
+        try:
+            data = client.get_hrv_data(d)
+        except Exception:
+            continue
+        summary = safe_path(data, "hrvSummary") or {}
+        if summary.get("status"):
+            return {"status": summary.get("status"), "weeklyAvg": summary.get("weeklyAvg"),
+                    "lastNightAvg": summary.get("lastNightAvg"), "d": d}
+    return None
 
 
 def fetch_sleep(client, days=90):
@@ -233,38 +267,46 @@ def fetch_sleep(client, days=90):
     return points
 
 
-def fetch_weekly_steps(client):
+def _weekly_value(w, *keys):
+    """Los endpoints semanales devuelven {calendarDate, values:{...}} o
+    {calendarDate, value}; busca la clave en ambos niveles."""
+    nested = w.get("values") if isinstance(w.get("values"), dict) else {}
+    for k in keys:
+        if nested.get(k) is not None:
+            return nested[k]
+        if w.get(k) is not None:
+            return w[k]
+    return None
+
+
+def fetch_weekly_steps(client, weeks=52):
     try:
-        data = client.get_weekly_steps(TODAY.isoformat())
-    except Exception:
-        return []
-    if not isinstance(data, list):
+        data = client.get_weekly_steps(TODAY.isoformat(), weeks)
+    except Exception as e:
+        print(f"Pasos no disponibles: {e}")
         return []
     out = []
-    for w in data:
-        d = w.get("calendarDate") or w.get("weekStart") or w.get("date")
-        steps = w.get("totalSteps") or w.get("averageSteps") or w.get("steps")
+    for w in data if isinstance(data, list) else []:
+        d = w.get("calendarDate")
+        steps = _weekly_value(w, "totalSteps", "steps", "averageSteps")
         if d and steps is not None:
-            out.append({"d": str(d)[:10], "steps": steps})
-    out.sort(key=lambda p: p["d"])
-    return out
+            out.append({"d": str(d)[:10], "steps": round(steps)})
+    return sorted(out, key=lambda p: p["d"])
 
 
-def fetch_weekly_stress(client):
+def fetch_weekly_stress(client, weeks=52):
     try:
-        data = client.get_weekly_stress(TODAY.isoformat())
-    except Exception:
-        return []
-    if not isinstance(data, list):
+        data = client.get_weekly_stress(TODAY.isoformat(), weeks)
+    except Exception as e:
+        print(f"Estrés no disponible: {e}")
         return []
     out = []
-    for w in data:
-        d = w.get("calendarDate") or w.get("weekStart") or w.get("date")
-        stress = w.get("overallStressLevel") or w.get("avgStressLevel") or w.get("averageStressLevel")
-        if d and stress is not None:
-            out.append({"d": str(d)[:10], "stress": stress})
-    out.sort(key=lambda p: p["d"])
-    return out
+    for w in data if isinstance(data, list) else []:
+        d = w.get("calendarDate")
+        stress = _weekly_value(w, "value", "overallStressLevel", "averageStressLevel", "avgStressLevel")
+        if d and stress is not None and stress >= 0:
+            out.append({"d": str(d)[:10], "stress": round(stress)})
+    return sorted(out, key=lambda p: p["d"])
 
 
 def fetch_intensity_minutes(client, weeks=52):
@@ -319,6 +361,7 @@ def mock_wellness():
                  for i in range(52)]
 
     return {
+        "hrv": {"status": "BALANCED", "weeklyAvg": 52, "lastNightAvg": 55, "d": TODAY.isoformat()},
         "training_load": tl, "training_status": latest_status,
         "vo2max": vo2, "vo2max_category": "Bueno", "ftp": ftp,
         "sleep": sleep, "steps_weekly": steps, "stress_weekly": stress,
@@ -336,7 +379,7 @@ def debug_dump(client):
     de traer datos. No escribe ningún archivo."""
     activities = fetch_activities(client)
     cutoff = (TODAY - timedelta(days=365)).isoformat()
-    recent = [a for a in activities if a["d"] >= cutoff]
+    recent = sorted([a for a in activities if a["d"] >= cutoff], key=lambda a: a["d"])
     last_any = recent[-1]["d"] if recent else TODAY.isoformat()
     last_run = next((a["d"] for a in reversed(recent) if sportOf(a["t"]) == "running"), None)
     last_bike = next((a["d"] for a in reversed(recent) if sportOf(a["t"]) == "cycling"), None)
@@ -348,8 +391,12 @@ def debug_dump(client):
         f"get_max_metrics({last_run}) [running]": (lambda: client.get_max_metrics(last_run)) if last_run else None,
         f"get_max_metrics({last_bike}) [cycling]": (lambda: client.get_max_metrics(last_bike)) if last_bike else None,
         "get_cycling_ftp()": lambda: client.get_cycling_ftp(),
-        "get_weekly_steps()": lambda: client.get_weekly_steps(),
-        "get_weekly_stress()": lambda: client.get_weekly_stress(),
+        "FTP histórico (biometric-service)": lambda: client.connectapi(
+            f"/biometric-service/stats/functionalThresholdPower/range/{(TODAY - timedelta(days=365)).isoformat()}/{TODAY.isoformat()}",
+            params={"sport": "CYCLING", "aggregation": "daily", "aggregationStrategy": "LATEST"}),
+        "get_hrv_data(ayer)": lambda: client.get_hrv_data((TODAY - timedelta(days=1)).isoformat()),
+        "get_weekly_steps(today, 4)": lambda: client.get_weekly_steps(TODAY.isoformat(), 4),
+        "get_weekly_stress(today, 4)": lambda: client.get_weekly_stress(TODAY.isoformat(), 4),
         "get_weekly_intensity_minutes(...)": lambda: client.get_weekly_intensity_minutes(
             (TODAY - timedelta(weeks=52)).isoformat(), TODAY.isoformat()),
     }
@@ -402,7 +449,11 @@ def main():
 
             training_load, training_status = fetch_training_load(client, all_dates)
             vo2max, vo2max_category = fetch_vo2max(client, run_dates, bike_dates)
+            hrv = fetch_hrv_status(client)
+            if hrv:
+                training_status["hrvStatus"] = hrv["status"]
             wellness = {
+                "hrv": hrv,
                 "training_load": training_load, "training_status": training_status,
                 "vo2max": vo2max, "vo2max_category": vo2max_category,
                 "ftp": fetch_ftp(client),
