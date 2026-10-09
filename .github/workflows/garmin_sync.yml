@@ -6,8 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: "full (todo) / activities (solo actividades, rápido) / debug (imprime JSON crudo, no guarda nada)"
+        description: "full (todo) / activities (solo actividades) / debug (imprime JSON crudo) / workouts (envía el plan del Coach a Garmin Connect)"
         default: "full"
+      plan:
+        description: "JSON del plan de entrenamientos (lo manda el dashboard cuando scope=workouts)"
+        default: ""
 
 jobs:
   sync:
@@ -22,6 +25,7 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Descargar datos
+        if: ${{ github.event.inputs.scope != 'workouts' }}
         run: python src/build_data.py
         env:
           USE_GARMIN: "1"
@@ -30,8 +34,16 @@ jobs:
           ONLY_ACTIVITIES: ${{ github.event.inputs.scope == 'activities' && '1' || '0' }}
           DEBUG_WELLNESS: ${{ github.event.inputs.scope == 'debug' && '1' || '0' }}
 
+      - name: Enviar entrenamientos a Garmin Connect
+        if: ${{ github.event.inputs.scope == 'workouts' }}
+        run: python src/push_workouts.py
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          PLAN_JSON: ${{ github.event.inputs.plan }}
+
       - name: Publicar cambios
-        if: ${{ github.event.inputs.scope != 'debug' }}
+        if: ${{ github.event.inputs.scope != 'debug' && github.event.inputs.scope != 'workouts' }}
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
