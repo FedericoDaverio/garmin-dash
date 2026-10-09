@@ -133,6 +133,14 @@
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 
+  .plan { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .wk { display: flex; gap: 10px; align-items: center; justify-content: space-between; background: var(--card);
+        border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .wk-main { min-width: 0; font-size: 13px; }
+  .wk-steps { color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .plan-note { color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.4; }
+
   #lock-screen { position: fixed; inset: 0; background: var(--bg); z-index: 50;
                  display: flex; align-items: center; justify-content: center; }
   #lock-card { background: var(--card); border-radius: var(--r-lg); padding: 32px; width: min(340px, 90vw); text-align: center; }
@@ -267,6 +275,14 @@ const I18N = {
     raceGoal: "Objetivo de carrera específica", raceSport: "Deporte", raceDate: "Fecha de la carrera",
     raceDistance: "Distancia (km)", raceElev: "Desnivel (m)", raceTime: "Tiempo objetivo (opcional)",
     downloadPlan: "Descargar",
+    sendGarmin: "Enviar al calendario de Garmin Connect", downloadZip: "Todos (.zip)",
+    planSending: "Enviando el plan a Garmin Connect… tarda 1–2 minutos.",
+    planDone: "Listo: entrenamientos creados y programados en tu calendario de Garmin Connect. Sincroniza tu Edge para verlos.",
+    planFailed: "No se pudo enviar el plan. Revisa el log en la pestaña Actions de GitHub.",
+    planTooBig: "El plan es demasiado grande para enviarlo de una vez; pide menos semanas.",
+    planParseError: "No pude leer los entrenamientos estructurados. Pídele el plan de nuevo.",
+    planNote: "Se crean con objetivos por zona, según tu perfil de Garmin. Envíalo una sola vez: si lo repites, se duplican. Los .fit sirven para copiarlos por USB a la carpeta Garmin/NewFiles del Edge (Garmin Connect web no importa archivos .fit).",
+    zonesFromGarmin: "Zonas de tu perfil en Garmin",
     chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…", retrying: "reintentando",
     geminiBusy: "El modelo de IA está saturado o llegaste al límite por minuto. Prueba de nuevo en un minuto.",
     chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
@@ -318,6 +334,14 @@ const I18N = {
     raceGoal: "Specific race goal", raceSport: "Sport", raceDate: "Race date",
     raceDistance: "Distance (km)", raceElev: "Elevation (m)", raceTime: "Target time (optional)",
     downloadPlan: "Download",
+    sendGarmin: "Send to Garmin Connect calendar", downloadZip: "All (.zip)",
+    planSending: "Sending the plan to Garmin Connect… takes 1–2 minutes.",
+    planDone: "Done: workouts created and scheduled on your Garmin Connect calendar. Sync your Edge to see them.",
+    planFailed: "Couldn't send the plan. Check the log in the GitHub Actions tab.",
+    planTooBig: "The plan is too large to send at once; ask for fewer weeks.",
+    planParseError: "I couldn't read the structured workouts. Ask the coach for the plan again.",
+    planNote: "Created with zone targets from your Garmin profile. Send it only once: repeating it creates duplicates. The .fit files can be copied over USB to the Edge's Garmin/NewFiles folder (Garmin Connect web doesn't import .fit files).",
+    zonesFromGarmin: "Zones from your Garmin profile",
     chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…", retrying: "retrying",
     geminiBusy: "The AI model is overloaded or you hit the per-minute limit. Try again in a minute.",
     chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
@@ -369,6 +393,14 @@ const I18N = {
     raceGoal: "Obiettivo di gara specifico", raceSport: "Sport", raceDate: "Data della gara",
     raceDistance: "Distanza (km)", raceElev: "Dislivello (m)", raceTime: "Tempo obiettivo (opzionale)",
     downloadPlan: "Scarica",
+    sendGarmin: "Invia al calendario di Garmin Connect", downloadZip: "Tutti (.zip)",
+    planSending: "Invio del piano a Garmin Connect… ci vogliono 1–2 minuti.",
+    planDone: "Fatto: allenamenti creati e programmati nel tuo calendario Garmin Connect. Sincronizza l'Edge per vederli.",
+    planFailed: "Impossibile inviare il piano. Controlla il log nella scheda Actions di GitHub.",
+    planTooBig: "Il piano è troppo grande per essere inviato in una volta; chiedi meno settimane.",
+    planParseError: "Non sono riuscito a leggere gli allenamenti strutturati. Chiedi di nuovo il piano al coach.",
+    planNote: "Creati con obiettivi per zona dal tuo profilo Garmin. Invialo una sola volta: ripetendolo si duplicano. I .fit si copiano via USB nella cartella Garmin/NewFiles dell'Edge (Garmin Connect web non importa file .fit).",
+    zonesFromGarmin: "Zone del tuo profilo Garmin",
     chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…", retrying: "nuovo tentativo",
     geminiBusy: "Il modello IA è sovraccarico o hai raggiunto il limite al minuto. Riprova tra un minuto.",
     chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
@@ -953,7 +985,7 @@ function systemPrompt() {
     goals.notes ? `Athlete's own notes for the coach: ${goals.notes}` : `No extra notes from the athlete.`,
     `Wellness and training-status summary:\n${wellnessSummaryForPrompt()}`,
     `Complete activity history (CSV):\n${activitiesCsv()}`,
-    `Whenever you give a training plan (a set of workouts across days/weeks), always lay it out as a clear day-by-day or week-by-week structure (markdown table or list) so it can be read as a standalone plan — the UI lets the athlete download your reply as a file, so make the plan self-contained and well formatted.`,
+    workoutInstructions(),
   ].join("\n\n");
 }
 function md(text) {
@@ -992,6 +1024,253 @@ function addDownloadLink(div, plainText) {
   };
   div.appendChild(a);
 }
+// ---------------------------------------------------------------------------
+// Plan de entrenamientos del Coach: parseo, envío a Garmin Connect, archivos .fit
+// ---------------------------------------------------------------------------
+function currentFtp() { return (state.wellness?.ftp || []).filter((p) => p.ftp).at(-1)?.ftp || null; }
+function hasPower() {
+  const since = new Date(today - 180 * 86400000);
+  return !!currentFtp() || state.acts.some((a) => a.sport === "cycling" && a.pw && a.date >= since);
+}
+const PLAN_KINDS = ["warmup", "work", "interval", "recovery", "rest", "cooldown", "active"];
+
+function normStep(s, sport, maxZone) {
+  if (!s || typeof s !== "object") return null;
+  const kind = PLAN_KINDS.includes(String(s.kind).toLowerCase()) ? String(s.kind).toLowerCase() : "active";
+  const minutes = Math.min(600, Math.max(0, Number(s.minutes) || 0));
+  const km = sport === "running" ? Math.min(100, Math.max(0, Number(s.km) || 0)) : 0;
+  if (!minutes && !km) return null;
+  const z = Math.round(Number(s.zone) || 0);
+  const out = { kind };
+  if (minutes) out.minutes = Math.round(minutes * 10) / 10; else out.km = Math.round(km * 10) / 10;
+  if (z) out.zone = Math.min(maxZone, Math.max(1, z));
+  return out;
+}
+function normalizeWorkout(w) {
+  if (!w || !Array.isArray(w.steps) || !w.steps.length) return null;
+  const sport = /run|carrera|corr/i.test(String(w.sport || "")) ? "running" : "cycling";
+  const mode = sport === "cycling" && hasPower() ? "power" : "hr"; // ciclismo: potencia si hay datos; si no, FC
+  const maxZone = mode === "power" ? 7 : 5;
+  const items = [];
+  for (const it of w.steps) {
+    if (it && Array.isArray(it.steps) && Number(it.repeat) >= 2) {
+      const inner = it.steps.map((x) => normStep(x, sport, maxZone)).filter(Boolean);
+      if (inner.length) items.push({ repeat: Math.min(50, Math.round(Number(it.repeat))), steps: inner });
+    } else {
+      const st = normStep(it, sport, maxZone);
+      if (st) items.push(st);
+    }
+  }
+  if (!items.length) return null;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(w.date || "")) ? w.date : null;
+  return { date, sport, mode, name: String(w.name || "Workout").slice(0, 40), notes: String(w.notes || "").slice(0, 300), items };
+}
+function extractWorkouts(reply) {
+  let block = null, stripped = reply;
+  const closed = reply.match(/```json\s*([\s\S]*?)```/i);
+  const open = closed ? null : reply.match(/```json\s*([\s\S]*)$/i); // bloque sin cerrar (respuesta cortada)
+  const m = closed || open;
+  if (m) { block = m[1]; stripped = reply.replace(m[0], ""); }
+  if (block === null) return { text: reply, workouts: null, failed: false };
+  try {
+    const data = JSON.parse(block.trim());
+    const list = Array.isArray(data) ? data : data.workouts;
+    const workouts = (Array.isArray(list) ? list : []).map(normalizeWorkout).filter(Boolean);
+    return { text: stripped.trim(), workouts: workouts.length ? workouts : null, failed: !workouts.length };
+  } catch { return { text: stripped.trim(), workouts: null, failed: true }; }
+}
+
+const stepDur = (s) => (s.minutes ? `${s.minutes}'` : `${s.km} km`);
+const stepText = (s) => `${stepDur(s)}${s.zone ? " Z" + s.zone : ""}`;
+function planSummary(w) {
+  return w.items.map((it) => (it.repeat ? `${it.repeat}×(${it.steps.map(stepText).join(" / ")})` : stepText(it))).join(" · ");
+}
+function planMinutes(w) {
+  const dur = (s) => s.minutes || (s.km || 0) * 6;
+  return Math.round(w.items.reduce((sum, it) => sum + (it.repeat ? it.repeat * it.steps.reduce((a, s) => a + dur(s), 0) : dur(it)), 0));
+}
+const POWER_ZONES = [[0, 0.55], [0.55, 0.75], [0.75, 0.90], [0.90, 1.05], [1.05, 1.20], [1.20, 1.50], [1.50, null]];
+function zoneLegend(w) {
+  const used = new Set();
+  w.items.forEach((it) => (it.repeat ? it.steps : [it]).forEach((s) => s.zone && used.add(s.zone)));
+  const zs = [...used].sort((a, b) => a - b);
+  const ftp = currentFtp();
+  if (!zs.length || w.mode !== "power" || !ftp) return zs.length ? t("zonesFromGarmin") : "";
+  return zs.map((z) => {
+    const [lo, hi] = POWER_ZONES[z - 1];
+    const a = Math.round(lo * ftp), b = hi ? Math.round(hi * ftp) : null;
+    return `Z${z} ${!lo ? "<" + b : b ? a + "–" + b : ">" + a} W`;
+  }).join(" · ");
+}
+function planDateLabel(w) {
+  if (!w.date) return "";
+  const [y, m, d] = w.date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(t("locale"), { weekday: "short", day: "numeric", month: "short" });
+}
+const slug = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const fitFileName = (w) => `${w.date || "plan"}_${w.sport}_${slug(w.name) || "workout"}.fit`;
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// FIT-ENCODER-START — archivo de entrenamiento (workout) del protocolo FIT de Garmin
+const FIT_CRC = [0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400];
+function fitCrc(bytes, crc = 0) {
+  for (const b of bytes) {
+    let tmp = FIT_CRC[crc & 0xF];
+    crc = (crc >> 4) & 0x0FFF; crc = crc ^ tmp ^ FIT_CRC[b & 0xF];
+    tmp = FIT_CRC[crc & 0xF];
+    crc = (crc >> 4) & 0x0FFF; crc = crc ^ tmp ^ FIT_CRC[(b >> 4) & 0xF];
+  }
+  return crc;
+}
+function fitAscii(str, size) { // texto fijo, sin acentos, relleno con ceros
+  const clean = String(str ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "").slice(0, size - 1);
+  const out = new Array(size).fill(0);
+  for (let i = 0; i < clean.length; i++) out[i] = clean.charCodeAt(i);
+  return out;
+}
+const le16 = (v) => [v & 255, (v >> 8) & 255];
+const le32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+function fitWorkoutBytes(w) {
+  const INTENSITY = { warmup: 2, cooldown: 3, work: 5, interval: 5, recovery: 4, rest: 1, active: 0 };
+  const power = w.mode === "power";
+  const flat = [];
+  const mk = (st) => {
+    const time = !!st.minutes;
+    return { idx: flat.length, dType: time ? 0 : 1,
+             dVal: time ? Math.round(st.minutes * 60000) : Math.round(st.km * 100000), // ms / cm
+             tType: st.zone ? (power ? 4 : 1) : 2, tVal: st.zone || 0, intensity: INTENSITY[st.kind] ?? 0 };
+  };
+  for (const it of w.items) {
+    if (it.repeat) {
+      const start = flat.length;
+      for (const st of it.steps) flat.push(mk(st));
+      flat.push({ idx: flat.length, dType: 6, dVal: start, tType: 0xFF, tVal: it.repeat, intensity: 0xFF }); // repetir desde `start`
+    } else flat.push(mk(it));
+  }
+  const data = [];
+  const def = (local, global, fields) => data.push(0x40 | local, 0, 0, ...le16(global), fields.length, ...fields.flat());
+  const name = `${w.date ? w.date.slice(5) + " " : ""}${w.name}`;
+  def(0, 0, [[0, 1, 0x00], [1, 2, 0x84], [2, 2, 0x84], [3, 4, 0x8C], [4, 4, 0x86]]); // file_id
+  data.push(0, 5, ...le16(255), ...le16(0), ...le32(1), ...le32(Math.floor(Date.now() / 1000) - 631065600));
+  def(1, 26, [[4, 1, 0x00], [5, 4, 0x8C], [6, 2, 0x84], [8, 32, 0x07]]); // workout
+  data.push(1, w.sport === "running" ? 1 : 2, ...le32(0x20), ...le16(flat.length), ...fitAscii(name, 32));
+  def(2, 27, [[254, 2, 0x84], [1, 1, 0x00], [2, 4, 0x86], [3, 1, 0x00], [4, 4, 0x86], [5, 4, 0x86], [6, 4, 0x86], [7, 1, 0x00]]); // workout_step
+  for (const st of flat) {
+    data.push(2, ...le16(st.idx), st.dType, ...le32(st.dVal), st.tType, ...le32(st.tVal), ...le32(0xFFFFFFFF), ...le32(0xFFFFFFFF), st.intensity);
+  }
+  const header = [14, 0x20, ...le16(2140), ...le32(data.length), 0x2E, 0x46, 0x49, 0x54];
+  const head = [...header, ...le16(fitCrc(header))];
+  const body = [...head, ...data];
+  return Uint8Array.from([...body, ...le16(fitCrc(body))]);
+}
+// FIT-ENCODER-END
+
+const CRC32_TABLE = (() => {
+  const tb = [];
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; tb[n] = c >>> 0; }
+  return tb;
+})();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (const b of bytes) c = CRC32_TABLE[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) { // .zip sin compresión (suficiente para archivos pequeños)
+  const enc = new TextEncoder(), parts = [], central = [], now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  let offset = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const local = [0x50, 0x4B, 3, 4, 20, 0, 0, 8, 0, 0, ...le16(dosTime), ...le16(dosDate), ...le32(crc), ...le32(size), ...le32(size), ...le16(nm.length), 0, 0];
+    parts.push(Uint8Array.from(local), nm, f.data);
+    central.push(Uint8Array.from([0x50, 0x4B, 1, 2, 20, 0, 20, 0, 0, 8, 0, 0, ...le16(dosTime), ...le16(dosDate), ...le32(crc), ...le32(size), ...le32(size),
+      ...le16(nm.length), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...le32(offset)]), nm);
+    offset += local.length + nm.length + size;
+  }
+  const centralSize = central.reduce((n, a) => n + a.length, 0);
+  parts.push(...central, Uint8Array.from([0x50, 0x4B, 5, 6, 0, 0, 0, 0, ...le16(files.length), ...le16(files.length), ...le32(centralSize), ...le32(offset), 0, 0]));
+  return new Blob(parts, { type: "application/zip" });
+}
+
+function renderPlan(container, workouts) {
+  const wrap = document.createElement("div");
+  wrap.className = "plan";
+  for (const w of workouts) {
+    const row = document.createElement("div");
+    row.className = "wk";
+    const head = [planDateLabel(w), t(w.sport), `~${planMinutes(w)} min`].filter(Boolean).join(" · ");
+    row.innerHTML = `<div class="wk-main"><b>${escapeHtml(head)}</b><div>${escapeHtml(w.name)}</div>
+      <div class="wk-steps">${escapeHtml(planSummary(w))}</div><div class="wk-steps">${escapeHtml(zoneLegend(w))}</div></div>`;
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = "⬇ .fit";
+    b.onclick = () => downloadBlob(new Blob([fitWorkoutBytes(w)], { type: "application/octet-stream" }), fitFileName(w));
+    row.appendChild(b);
+    wrap.appendChild(row);
+  }
+  const bar = document.createElement("div");
+  bar.className = "plan-actions";
+  const send = document.createElement("button");
+  send.className = "btn primary"; send.textContent = `📅 ${t("sendGarmin")}`;
+  send.onclick = () => sendPlanToGarmin(workouts, send);
+  bar.appendChild(send);
+  if (workouts.length > 1) {
+    const zip = document.createElement("button");
+    zip.className = "btn"; zip.textContent = `⬇ ${t("downloadZip")}`;
+    zip.onclick = () => downloadBlob(
+      zipStore(workouts.map((w) => ({ name: fitFileName(w), data: fitWorkoutBytes(w) }))), `entrenamientos_${new Date().toISOString().slice(0, 10)}.zip`);
+    bar.appendChild(zip);
+  }
+  const note = document.createElement("div");
+  note.className = "plan-note"; note.textContent = t("planNote");
+  container.appendChild(wrap); container.appendChild(bar); container.appendChild(note);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+async function sendPlanToGarmin(workouts, btn) {
+  const token = store.get("gh_token", "");
+  if (!token) { openSettings(); toast(t("needToken")); return; }
+  const plan = JSON.stringify(workouts);
+  if (plan.length > 60000) { toast(t("planTooBig")); return; }
+  const base = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/actions/workflows/${REPO.workflow}`;
+  btn.disabled = true;
+  try {
+    const started = Date.now();
+    const res = await fetch(`${base}/dispatches`, {
+      method: "POST", headers: ghHeaders(token),
+      body: JSON.stringify({ ref: REPO.ref, inputs: { scope: "workouts", plan } }),
+    });
+    if (res.status !== 204) throw new Error(res.status);
+    toast(t("planSending"), 8000);
+    pollRun(base, token, started, (ok) => {
+      btn.disabled = false;
+      if (ok) toast(t("planDone"), 12000);
+      else if (ok === false) toast(t("planFailed"), 10000);
+    });
+  } catch (e) {
+    toast(`${t("syncError")} (${e.message})`);
+    btn.disabled = false;
+  }
+}
+
+function workoutInstructions() {
+  const power = hasPower(), ftp = currentFtp();
+  const cycling = power
+    ? `Cycling workouts use POWER zones Z1–Z7 (Coggan, % of FTP${ftp ? `; the athlete's FTP is ${ftp} W` : ""}): Z1 <55%, Z2 55–75%, Z3 75–90%, Z4 90–105%, Z5 105–120%, Z6 120–150%, Z7 >150%.`
+    : `The athlete has no cycling power data, so cycling workouts use HEART RATE zones Z1–Z5 (Z1 50–60% of max HR, Z2 60–70%, Z3 70–80%, Z4 80–90%, Z5 90–100%).`;
+  return [
+    `WORKOUT FILES: when — and only when — the athlete asks for a training plan, a workout or a training week, reply with a short readable summary and then append exactly ONE fenced code block tagged json (compact, valid JSON, no comments) with this shape:`,
+    `{"workouts":[{"date":"YYYY-MM-DD","sport":"cycling|running","name":"max 20 chars","notes":"one short line","steps":[{"kind":"warmup","minutes":10,"zone":1},{"repeat":4,"steps":[{"kind":"work","minutes":5,"zone":5},{"kind":"recovery","minutes":3,"zone":1}]},{"kind":"cooldown","minutes":10,"zone":1}]}]}`,
+    `Rules: one object per workout (omit rest days); every step has kind (warmup|work|recovery|rest|cooldown|active), minutes (running steps may use "km" instead) and zone; repeat groups cannot be nested; at most 10 workouts; use real future dates starting tomorrow; keep the steps consistent with the workout name and the athlete's current fitness and goal.`,
+    cycling,
+    `Running workouts always use HEART RATE zones Z1–Z5.`,
+    `The app turns that JSON into Garmin workouts with zone targets, so never repeat the JSON in prose and never mention the JSON block.`,
+  ].join("\n");
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function callWithRetry(fetchOnce, pending) {
@@ -1065,8 +1344,13 @@ async function ask(text) {
   try {
     const reply = provider === "groq" ? await callGroq(model, key, pending) : await callGemini(model, key, pending);
     pending.classList.remove("pending");
-    pending.innerHTML = md(reply);
-    addDownloadLink(pending, reply);
+    const parsed = extractWorkouts(reply);
+    pending.innerHTML = md(parsed.text || "");
+    if (parsed.workouts) renderPlan(pending, parsed.workouts);
+    else {
+      if (parsed.failed) pending.insertAdjacentHTML("beforeend", `<p class="plan-note">${escapeHtml(t("planParseError"))}</p>`);
+      addDownloadLink(pending, reply);
+    }
     state.chat.push({ role: "model", parts: [{ text: reply }] });
   } catch (e) {
     console.error(e);
@@ -1107,26 +1391,28 @@ async function triggerSync() {
     });
     if (res.status !== 204) throw new Error(res.status);
     toast(t("syncStarted"), 8000);
-    pollRun(base, token, started);
+    pollRun(base, token, started, (ok) => {
+      $("btn-sync").disabled = false;
+      if (ok) { toast(t("syncDone"), 60000); setTimeout(() => location.reload(), 60000); }
+      else if (ok === false) toast(t("syncFailed"), 10000);
+    });
   } catch (e) {
     toast(`${t("syncError")} (${e.message})`);
     $("btn-sync").disabled = false;
   }
 }
-function pollRun(base, token, started) {
+function pollRun(base, token, started, onFinish) {
   const check = async () => {
     try {
       const res = await fetch(`${base}/runs?per_page=1&event=workflow_dispatch`, { headers: ghHeaders(token) });
       const run = (await res.json()).workflow_runs?.[0];
       if (run && new Date(run.created_at).getTime() >= started - 60000 && run.status === "completed") {
-        $("btn-sync").disabled = false;
-        if (run.conclusion === "success") { toast(t("syncDone"), 60000); setTimeout(() => location.reload(), 60000); }
-        else toast(t("syncFailed"), 10000);
+        onFinish(run.conclusion === "success");
         return;
       }
     } catch {}
     if (Date.now() - started < 15 * 60000) setTimeout(check, 15000);
-    else $("btn-sync").disabled = false;
+    else onFinish(null);
   };
   setTimeout(check, 15000);
 }
