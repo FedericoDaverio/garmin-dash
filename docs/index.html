@@ -255,6 +255,7 @@ const I18N = {
     lastActivity: "Última actividad", date: "Fecha", time: "Tiempo", hr: "FC media",
     distance: "Distancia", elevation: "Desnivel", speed: "Velocidad media", pace: "Ritmo medio", power: "Watts medios",
     avgPowerMonth: "Watts medios y normalizados por mes (últimos 12 meses)", avgPower: "Watts medios", normPower: "Watts normalizados",
+    ftpNote: "Garmin solo da el valor vigente, no histórico",
     perYear: "Por año", kmYear: "Kilómetros", elevYear: "Desnivel", hoursYear: "Horas",
     progression: "Progresión acumulada", avg: "Promedio",
     avgNote: "La línea punteada es el promedio de los años completos.",
@@ -305,6 +306,7 @@ const I18N = {
     lastActivity: "Last activity", date: "Date", time: "Time", hr: "Avg HR",
     distance: "Distance", elevation: "Elevation", speed: "Avg speed", pace: "Avg pace", power: "Avg power",
     avgPowerMonth: "Avg and normalized power by month (last 12 months)", avgPower: "Avg power", normPower: "Normalized power",
+    ftpNote: "Garmin only gives the current value, not history",
     perYear: "Per year", kmYear: "Kilometers", elevYear: "Elevation", hoursYear: "Hours",
     progression: "Cumulative progress", avg: "Average",
     avgNote: "The dotted line is the average of complete years.",
@@ -355,6 +357,7 @@ const I18N = {
     lastActivity: "Ultima attività", date: "Data", time: "Tempo", hr: "FC media",
     distance: "Distanza", elevation: "Dislivello", speed: "Velocità media", pace: "Passo medio", power: "Watt medi",
     avgPowerMonth: "Watt medi e normalizzati per mese (ultimi 12 mesi)", avgPower: "Watt medi", normPower: "Watt normalizzati",
+    ftpNote: "Garmin fornisce solo il valore attuale, non lo storico",
     perYear: "Per anno", kmYear: "Chilometri", elevYear: "Dislivello", hoursYear: "Ore",
     progression: "Progressione cumulativa", avg: "Media",
     avgNote: "La linea tratteggiata è la media degli anni completi.",
@@ -531,7 +534,8 @@ function renderSport(tab) {
 
   const isCycling = tab === "cycling";
   const isRunning = tab === "running";
-  const totalsKeys = tab === "all" ? ["acts", "h"] : ["acts", "km", "elev", "h"];
+  const isAll = tab === "all";
+  const totalsKeys = isAll ? ["acts", "h"] : ["acts", "km", "elev", "h"];
 
   const last = list[list.length - 1];
   const dateStr = last.date.toLocaleDateString(t("locale"), { day: "numeric", month: "short", year: "numeric" });
@@ -556,8 +560,11 @@ function renderSport(tab) {
     wellnessSections += `<h2 class="section-title">VO2max</h2>
       <div class="chart-card wide"><div class="chart" id="vo2-chart"></div></div>`;
     if (isCycling) {
-      wellnessSections += `<h2 class="section-title">FTP</h2>
-        <div class="chart-card wide"><div class="chart" id="ftp-chart"></div></div>`;
+      const lastFtp = (state.wellness?.ftp || []).at(-1);
+      const ftpDateStr = lastFtp ? new Date(lastFtp.d).toLocaleDateString(t("locale"), { day: "numeric", month: "short", year: "numeric" }) : "";
+      wellnessSections += `<h2 class="section-title">FTP<span>${t("ftpNote")}</span></h2>
+        <div class="tile" style="max-width:220px"><div class="label">${ftpDateStr || "—"}</div>
+        <div class="value">${lastFtp ? fmt(lastFtp.ftp) : "—"}<small>W</small></div></div>`;
     }
   }
 
@@ -571,33 +578,32 @@ function renderSport(tab) {
 
     <h2 class="section-title">${t("perYear")}<span>${t("avgNote")}</span></h2>
     <div class="grid-3">
-      <div class="chart-card"><h3>${t("kmYear")}</h3><div class="chart" id="bar-km"></div></div>
-      <div class="chart-card"><h3>${t("elevYear")}</h3><div class="chart" id="bar-elev"></div></div>
+      ${isAll ? "" : `<div class="chart-card"><h3>${t("kmYear")}</h3><div class="chart" id="bar-km"></div></div>
+      <div class="chart-card"><h3>${t("elevYear")}</h3><div class="chart" id="bar-elev"></div></div>`}
       <div class="chart-card"><h3>${t("hoursYear")}</h3><div class="chart" id="bar-h"></div></div>
     </div>
     ${isCycling ? `<div class="chart-card wide" style="margin-top:16px"><h3>${t("avgPowerMonth")}</h3><div class="chart" id="bar-pw"></div></div>` : ""}
 
     <h2 class="section-title">${t("progression")}</h2>
-    <div class="chart-card wide"><h3>${t("kmYear")}</h3><div class="chart" id="cum-km"></div></div>
-    <div class="chart-card wide"><h3>${t("elevYear")}</h3><div class="chart" id="cum-elev"></div></div>
+    ${isAll ? "" : `<div class="chart-card wide"><h3>${t("kmYear")}</h3><div class="chart" id="cum-km"></div></div>
+    <div class="chart-card wide"><h3>${t("elevYear")}</h3><div class="chart" id="cum-elev"></div></div>`}
     <div class="chart-card wide"><h3>${t("hoursYear")}</h3><div class="chart" id="cum-h"></div></div>
 
     ${wellnessSections}
 
     <div class="download-row"><button class="btn" id="btn-csv">⬇ ${t("download")}</button></div>`;
 
-  barChart("bar-km", years, list, "km", "km", 0);
-  barChart("bar-elev", years, list, "elev", "m", 0);
+  if (!isAll) {
+    barChart("bar-km", years, list, "km", "km", 0);
+    barChart("bar-elev", years, list, "elev", "m", 0);
+    cumChart("cum-km", years, list, "km", "km", 0);
+    cumChart("cum-elev", years, list, "elev", "m", 0);
+  }
   barChart("bar-h", years, list, "h", "h", 0);
-  cumChart("cum-km", years, list, "km", "km", 0);
-  cumChart("cum-elev", years, list, "elev", "m", 0);
   cumChart("cum-h", years, list, "h", "h", 1);
 
   if (isCycling) monthlyPowerBarChart("bar-pw", list);
-  if (isCycling || isRunning) {
-    vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
-    if (isCycling) ftpChart("ftp-chart");
-  }
+  if (isCycling || isRunning) vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
 
   $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
 }
@@ -717,9 +723,6 @@ function wellnessLineFig(el, points, yKey, color, unit, dec = 0) {
 }
 function vo2maxChart(el, key) {
   wellnessLineFig(el, state.wellness?.vo2max, key, colors().accent, "ml/kg/min", 1);
-}
-function ftpChart(el) {
-  wellnessLineFig(el, state.wellness?.ftp, "ftp", colors().accent, "W", 0);
 }
 
 // ---------------------------------------------------------------------------
