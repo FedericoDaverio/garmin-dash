@@ -244,7 +244,7 @@
 // Configuración
 // ---------------------------------------------------------------------------
 const REPO = { owner: "FedericoDaverio", repo: "garmin-dash", workflow: "garmin_sync.yml", ref: "main" };
-const DEFAULT_MODELS = { gemini: "gemini-3.8-flash", groq: "llama-3.3-70b-versatile" };
+const DEFAULT_MODELS = { gemini: "gemini-3.8-flash", groq: "openai/gpt-oss-120b" };
 
 const I18N = {
   es: {
@@ -268,7 +268,7 @@ const I18N = {
     raceDistance: "Distancia (km)", raceElev: "Desnivel (m)", raceTime: "Tiempo objetivo (opcional)",
     downloadPlan: "Descargar",
     chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…", retrying: "reintentando",
-    geminiBusy: "Gemini está saturado ahora mismo. Ya reintenté unas veces — prueba de nuevo en un minuto.",
+    geminiBusy: "El modelo de IA está saturado o llegaste al límite por minuto. Prueba de nuevo en un minuto.",
     chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
     settings: "Ajustes", storedLocal: "Las claves se guardan solo en este navegador, nunca en el repositorio.",
     geminiKey: "API key de Gemini", groqKey: "API key de Groq", model: "Modelo", ghToken: "Token de GitHub (para actualizar datos)",
@@ -282,7 +282,7 @@ const I18N = {
     syncDone: "Datos actualizados. La página se recarga en 1 minuto.",
     syncFailed: "La actualización falló. Revisa la pestaña Actions en GitHub.",
     syncError: "No se pudo iniciar la actualización",
-    geminiError: "Gemini no respondió. Revisa la API key y el modelo en Ajustes.",
+    geminiError: "La IA no respondió. Revisa el proveedor, la API key y el modelo en Ajustes.",
     loadError: "No se pudieron cargar los datos (data/activities.json).",
     ofGoal: "de", answerLang: "español",
     months: ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
@@ -319,7 +319,7 @@ const I18N = {
     raceDistance: "Distance (km)", raceElev: "Elevation (m)", raceTime: "Target time (optional)",
     downloadPlan: "Download",
     chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…", retrying: "retrying",
-    geminiBusy: "Gemini is overloaded right now. I already retried a few times — try again in a minute.",
+    geminiBusy: "The AI model is overloaded or you hit the per-minute limit. Try again in a minute.",
     chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
     settings: "Settings", storedLocal: "Keys are stored only in this browser, never in the repository.",
     geminiKey: "Gemini API key", groqKey: "Groq API key", model: "Model", ghToken: "GitHub token (to refresh data)",
@@ -333,7 +333,7 @@ const I18N = {
     syncDone: "Data updated. The page reloads in 1 minute.",
     syncFailed: "The refresh failed. Check the Actions tab on GitHub.",
     syncError: "Couldn't start the refresh",
-    geminiError: "Gemini didn't respond. Check the API key and model in Settings.",
+    geminiError: "The AI didn't respond. Check the provider, API key and model in Settings.",
     loadError: "Couldn't load data (data/activities.json).",
     ofGoal: "of", answerLang: "English",
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
@@ -370,7 +370,7 @@ const I18N = {
     raceDistance: "Distanza (km)", raceElev: "Dislivello (m)", raceTime: "Tempo obiettivo (opzionale)",
     downloadPlan: "Scarica",
     chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…", retrying: "nuovo tentativo",
-    geminiBusy: "Gemini è sovraccarico in questo momento. Ho già riprovato un paio di volte — riprova tra un minuto.",
+    geminiBusy: "Il modello IA è sovraccarico o hai raggiunto il limite al minuto. Riprova tra un minuto.",
     chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
     settings: "Impostazioni", storedLocal: "Le chiavi restano solo in questo browser, mai nel repository.",
     geminiKey: "Chiave API Gemini", groqKey: "Chiave API Groq", model: "Modello", ghToken: "Token GitHub (per aggiornare i dati)",
@@ -384,7 +384,7 @@ const I18N = {
     syncDone: "Dati aggiornati. La pagina si ricarica tra 1 minuto.",
     syncFailed: "L'aggiornamento non è riuscito. Controlla la scheda Actions su GitHub.",
     syncError: "Impossibile avviare l'aggiornamento",
-    geminiError: "Gemini non ha risposto. Controlla chiave API e modello nelle Impostazioni.",
+    geminiError: "L'IA non ha risposto. Controlla provider, chiave API e modello nelle Impostazioni.",
     loadError: "Impossibile caricare i dati (data/activities.json).",
     ofGoal: "di", answerLang: "italiano",
     months: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
@@ -891,9 +891,29 @@ function saveGoals() {
 // Coach IA (Gemini)
 // ---------------------------------------------------------------------------
 function activitiesCsv() {
-  const rows = state.acts.map((a) =>
-    [a.d, a.sport, a.t, a.km, a.elev, a.h, a.hr ?? "", a.spd ?? ""].join(","));
-  return "date,sport,type,km,elev_m,hours,avg_hr,avg_kmh\n" + rows.join("\n");
+  // Historial completo resumido por mes y deporte + detalle de los últimos 60 días.
+  // Mandar cada actividad (1,000+) supera el límite de tokens del tier gratis.
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const groups = {};
+  for (const a of state.acts) {
+    const k = `${a.d.slice(0, 7)}|${a.sport}`;
+    const g = (groups[k] ||= { n: 0, km: 0, elev: 0, h: 0, hr: [], pw: [] });
+    g.n++; g.km += a.km || 0; g.elev += a.elev || 0; g.h += a.h || 0;
+    if (a.hr) g.hr.push(a.hr);
+    if (a.pw) g.pw.push(a.pw);
+  }
+  const avg = (arr) => (arr.length ? Math.round(arr.reduce((x, y) => x + y, 0) / arr.length) : "");
+  const monthly = Object.entries(groups).sort().map(([k, g]) => {
+    const [month, sport] = k.split("|");
+    return [month, sport, g.n, Math.round(g.km), Math.round(g.elev), r1(g.h), avg(g.hr), avg(g.pw)].join(",");
+  });
+  const since = new Date(today - 60 * 86400000);
+  const recent = state.acts.filter((a) => a.date >= since).map((a) =>
+    [a.d, a.sport, r1(a.km), a.elev, r1(a.h), a.hr ?? "", a.spd ?? "", a.pw ?? "", a.np ?? ""].join(","));
+  return "Monthly totals per sport (all history):\nmonth,sport,activities,km,elev_m,hours,avg_hr,avg_power_w\n"
+    + monthly.join("\n")
+    + "\n\nEvery activity in the last 60 days:\ndate,sport,km,elev_m,hours,avg_hr,avg_kmh,avg_power_w,norm_power_w\n"
+    + recent.join("\n");
 }
 function wellnessSummaryForPrompt() {
   const w = state.wellness;
@@ -999,16 +1019,33 @@ function callGemini(model, key, pending) {
   ), pending).then((data) => data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "—");
 }
 
-function callGroq(model, key, pending) {
+async function pickGroqModel(key) {
+  const res = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) return null;
+  const ids = ((await res.json()).data || []).map((m) => m.id);
+  const prefs = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+  return prefs.find((p) => ids.includes(p))
+    || ids.find((id) => !/whisper|tts|orpheus|guard|compound/i.test(id)) || null;
+}
+async function callGroq(model, key, pending) {
   const messages = [
     { role: "system", content: systemPrompt() },
     ...state.chat.map((m) => ({ role: m.role === "model" ? "assistant" : "user", content: m.parts[0].text })),
   ];
-  return callWithRetry(() => fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const run = (m) => callWithRetry(() => fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, messages }),
+    body: JSON.stringify({ model: m, messages }),
   }), pending).then((data) => data?.choices?.[0]?.message?.content || "—");
+  try {
+    return await run(model);
+  } catch (e) {
+    if (!e.message.includes("404")) throw e;
+    const alt = await pickGroqModel(key);
+    if (!alt || alt === model) throw e;
+    store.set("groq_model", alt); // recuerda el modelo que sí funciona
+    return run(alt);
+  }
 }
 
 async function ask(text) {
