@@ -208,34 +208,69 @@ def fetch_vo2max(client, run_dates, bike_dates):
     return points, category
 
 
-def fetch_ftp(client):
-    """Histórico de FTP: mismo endpoint que usa la gráfica de Garmin Connect web
-    (Performance Stats > FTP). Si falla, cae al valor vigente."""
-    start = (TODAY - timedelta(days=730)).isoformat()
-    path = f"/biometric-service/stats/functionalThresholdPower/range/{start}/{TODAY.isoformat()}"
-    points = []
-    try:
-        data = client.connectapi(path, params={
-            "sport": "CYCLING", "aggregation": "daily", "aggregationStrategy": "LATEST"})
-    except Exception as e:
-        print(f"FTP histórico no disponible: {e}")
-        data = None
+def _ftp_records(data):
+    """Aplana cualquier forma de respuesta (lista, dict con listas, anidados)
+    en los dicts que traen un valor de FTP."""
     if isinstance(data, list):
-        for e in data:
-            d = str(e.get("from") or e.get("calendarDate") or "")[:10]
-            v = e.get("value") or e.get("functionalThresholdPower")
-            if d and v:
-                points.append({"d": d, "ftp": round(v)})
-    if points:
-        return sorted(points, key=lambda p: p["d"])
+        for x in data:
+            yield from _ftp_records(x)
+    elif isinstance(data, dict):
+        if any(k in data for k in ("value", "functionalThresholdPower", "ftp")):
+            yield data
+        else:
+            for v in data.values():
+                if isinstance(v, (list, dict)):
+                    yield from _ftp_records(v)
+
+
+def _ftp_points(data):
+    """Devuelve solo los CAMBIOS de FTP (como la gráfica de Garmin Connect)."""
+    by_date = {}
+    for r in _ftp_records(data):
+        d = next((str(r[k])[:10] for k in ("from", "calendarDate", "date", "startDate", "until") if r.get(k)), None)
+        v = next((r[k] for k in ("value", "functionalThresholdPower", "ftp")
+                  if isinstance(r.get(k), (int, float)) and not isinstance(r.get(k), bool) and r[k] > 0), None)
+        if d and v:
+            by_date[d] = round(v)
+    changes, prev = [], None
+    for d, v in sorted(by_date.items()):
+        if v != prev:
+            changes.append({"d": d, "ftp": v})
+            prev = v
+    return changes
+
+
+def fetch_ftp(client):
+    """Histórico de FTP (misma fuente que Performance Stats > FTP en Garmin
+    Connect). Prueba agregación diaria, semanal y mensual hasta obtener varios
+    puntos; al final añade el valor vigente si es más reciente."""
+    start, end = (TODAY - timedelta(days=365)).isoformat(), TODAY.isoformat()
+    points = []
+    for aggregation in ("daily", "weekly", "monthly"):
+        try:
+            if hasattr(client, "get_functional_threshold_power_range"):
+                data = client.get_functional_threshold_power_range(start, end, sport="CYCLING", aggregation=aggregation)
+            else:
+                data = client.connectapi(
+                    f"/biometric-service/stats/functionalThresholdPower/range/{start}/{end}",
+                    params={"sport": "CYCLING", "aggregation": aggregation, "aggregationStrategy": "LATEST"})
+        except Exception as e:
+            print(f"FTP histórico ({aggregation}): error {e}")
+            continue
+        points = _ftp_points(data)
+        print(f"FTP histórico ({aggregation}): {len(points)} cambios")
+        if len(points) > 1:
+            break
     try:
         cur = client.get_cycling_ftp()
     except Exception:
-        return []
-    if not isinstance(cur, dict) or not cur.get("functionalThresholdPower"):
-        return []
-    return [{"d": (cur.get("calendarDate") or "")[:10] or TODAY.isoformat(),
-             "ftp": cur["functionalThresholdPower"]}]
+        cur = None
+    v = cur.get("functionalThresholdPower") if isinstance(cur, dict) else None
+    if v:
+        d = (cur.get("calendarDate") or "")[:10] or TODAY.isoformat()
+        if not points or (d > points[-1]["d"] and v != points[-1]["ftp"]):
+            points.append({"d": d, "ftp": v})
+    return points
 
 
 def fetch_hrv_status(client, days_back=7):
@@ -349,8 +384,9 @@ def mock_wellness():
         vo2.append({"d": d.isoformat(), "run": round(47 + i * 0.1 + rng.normal(0, 0.3), 1),
                     "bike": round(50 + i * 0.12 + rng.normal(0, 0.3), 1), "fitnessAge": round(33 - i * 0.05)})
 
-    ftp = [{"d": (TODAY - timedelta(days=30 * (5 - i))).isoformat(), "ftp": v}
-           for i, v in enumerate([210, 215, 218, 222, 228, 231])]
+    ftp = [{"d": (TODAY - timedelta(days=days_ago)).isoformat(), "ftp": v}
+           for days_ago, v in [(270, 225), (250, 213), (235, 210), (215, 225), (180, 216),
+                               (135, 233), (100, 200), (70, 230), (45, 235), (20, 237)]]
 
     sleep = [{"d": (TODAY - timedelta(days=i)).isoformat(), "h": round(max(rng.normal(7, 0.8), 4), 1)}
              for i in range(90)][::-1]
@@ -393,9 +429,10 @@ def debug_dump(client):
         f"get_max_metrics({last_run}) [running]": (lambda: client.get_max_metrics(last_run)) if last_run else None,
         f"get_max_metrics({last_bike}) [cycling]": (lambda: client.get_max_metrics(last_bike)) if last_bike else None,
         "get_cycling_ftp()": lambda: client.get_cycling_ftp(),
-        "FTP histórico (biometric-service)": lambda: client.connectapi(
-            f"/biometric-service/stats/functionalThresholdPower/range/{(TODAY - timedelta(days=365)).isoformat()}/{TODAY.isoformat()}",
-            params={"sport": "CYCLING", "aggregation": "daily", "aggregationStrategy": "LATEST"}),
+        "FTP histórico diario (get_functional_threshold_power_range)": lambda: client.get_functional_threshold_power_range(
+            (TODAY - timedelta(days=365)).isoformat(), TODAY.isoformat(), sport="CYCLING", aggregation="daily"),
+        "FTP histórico mensual": lambda: client.get_functional_threshold_power_range(
+            (TODAY - timedelta(days=365)).isoformat(), TODAY.isoformat(), sport="CYCLING", aggregation="monthly"),
         "get_hrv_data(ayer)": lambda: client.get_hrv_data((TODAY - timedelta(days=1)).isoformat()),
         "get_weekly_steps(today, 4)": lambda: client.get_weekly_steps(TODAY.isoformat(), 4),
         "get_weekly_stress(today, 4)": lambda: client.get_weekly_stress(TODAY.isoformat(), 4),
