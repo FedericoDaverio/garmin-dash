@@ -1123,7 +1123,7 @@ function saveGoals() {
 // ---------------------------------------------------------------------------
 // Coach IA (Gemini)
 // ---------------------------------------------------------------------------
-function activitiesCsv() {
+function activitiesCsv(compact = false) {
   // Historial completo resumido por mes y deporte + detalle de los últimos 60 días.
   // Mandar cada actividad (1,000+) supera el límite de tokens del tier gratis.
   const r1 = (v) => Math.round(v * 10) / 10;
@@ -1140,13 +1140,14 @@ function activitiesCsv() {
     const [month, sport] = k.split("|");
     return [month, sport, g.n, Math.round(g.km), Math.round(g.elev), r1(g.h), avg(g.hr), avg(g.pw)].join(",");
   });
-  const since = new Date(today - 60 * 86400000);
+  const days = compact ? 30 : 60;
+  const since = new Date(today - days * 86400000);
   const recent = state.acts.filter((a) => a.date >= since).map((a) =>
     [a.d, a.sport, r1(a.km), a.elev, r1(a.h), a.hr ?? "", a.spd ?? "", a.pw ?? "", a.np ?? ""].join(","));
+  const recentBlock = `Every activity in the last ${days} days:\ndate,sport,km,elev_m,hours,avg_hr,avg_kmh,avg_power_w,norm_power_w\n` + recent.join("\n");
+  if (compact) return recentBlock;
   return "Monthly totals per sport (all history):\nmonth,sport,activities,km,elev_m,hours,avg_hr,avg_power_w\n"
-    + monthly.join("\n")
-    + "\n\nEvery activity in the last 60 days:\ndate,sport,km,elev_m,hours,avg_hr,avg_kmh,avg_power_w,norm_power_w\n"
-    + recent.join("\n");
+    + monthly.join("\n") + "\n\n" + recentBlock;
 }
 function wellnessSummaryForPrompt() {
   const w = state.wellness;
@@ -1222,7 +1223,7 @@ function trendsForPrompt() {
   if (w.hrv) lines.push(`HRV: status ${w.hrv.status}, weekly average ${w.hrv.weeklyAvg ?? "n/a"} ms, last night ${w.hrv.lastNightAvg ?? "n/a"} ms.`);
   return lines.join("\n");
 }
-function systemPrompt() {
+function systemPrompt(compact = false) {
   const goals = getGoals();
   const race = {
     sport: goals.raceSport || null, date: goals.raceDate || null,
@@ -1239,10 +1240,10 @@ function systemPrompt() {
       : `No specific race target has been set yet.`,
     goals.notes ? `Athlete's own notes for the coach: ${goals.notes}` : `No extra notes from the athlete.`,
     `Wellness and training-status summary:\n${wellnessSummaryForPrompt()}`,
-    `Recent trends and monthly comparisons:\n${trendsForPrompt()}`,
-    `Complete activity history (CSV):\n${activitiesCsv()}`,
+    compact ? null : `Recent trends and monthly comparisons:\n${trendsForPrompt()}`,
+    `Activity history (CSV):\n${activitiesCsv(compact)}`,
     workoutInstructions(),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 function md(text) {
   const lines = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").split("\n");
@@ -1530,29 +1531,56 @@ function workoutInstructions() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function retryWaitSeconds(res, bodyText, attempt) {
+  const header = Number(res.headers.get("retry-after"));
+  const m = /try again in\s+([\d.]+)\s*(ms|s|m)\b/i.exec(bodyText);
+  const fromBody = m ? Number(m[1]) * (m[2] === "ms" ? 0.001 : m[2] === "m" ? 60 : 1) : 0;
+  return Math.min(30, Math.max(2, Math.ceil(header || fromBody || (attempt + 1) * 4)));
+}
 async function callWithRetry(fetchOnce, pending) {
-  const delays = [0, 2000, 5000]; // 3 intentos: inmediato, +2s, +5s
   let lastErr;
-  for (let i = 0; i < delays.length; i++) {
-    if (delays[i]) {
-      pending.textContent = `${t("thinking")} (${t("retrying")})`;
-      await sleep(delays[i]);
-    }
+  for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetchOnce();
     if (res.ok) return res.json();
     const text = await res.text();
     lastErr = new Error(`HTTP ${res.status}: ${text}`);
-    if (res.status !== 503 && res.status !== 429) throw lastErr; // solo reintenta en saturación/rate-limit temporal
+    if (res.status !== 503 && res.status !== 429) throw lastErr; // solo reintenta en saturación o límite por minuto
+    if (attempt === 2) break;
+    const wait = retryWaitSeconds(res, text, attempt);
+    pending.textContent = `${t("thinking")} (${t("retrying")} ${wait}s)`;
+    await sleep(wait * 1000);
   }
   throw lastErr;
 }
 
+// Solo se manda la parte reciente de la conversación: un historial largo (sobre todo con planes) revienta el límite de tokens.
+function chatWindow() {
+  let msgs = state.chat.slice(-8);
+  while (msgs.length && msgs[0].role !== "user") msgs = msgs.slice(1);
+  return msgs;
+}
+function compactReply(reply) { // en el historial, un plan ocupa una línea en vez de todo el JSON
+  const parsed = extractWorkouts(reply);
+  if (!parsed.workouts) return reply.length > 1500 ? reply.slice(0, 1500) + "…" : reply;
+  const list = parsed.workouts.map((w) => `${w.date || "no date"} ${w.sport} "${w.name}" (~${planMinutes(w)} min)`).join("; ");
+  return `${parsed.text}\n[Plan already sent to the athlete: ${list}]`;
+}
+const isTooLarge = (e) => /\b413\b|too large|reduce your message|context length|maximum context/i.test(e.message);
+function shortError(msg) {
+  const body = msg.replace(/^HTTP \d+:\s*/, "");
+  const status = (msg.match(/^HTTP (\d+)/) || [])[1];
+  let detail = body;
+  try { detail = JSON.parse(body)?.error?.message || body; } catch {}
+  return `${status ? "HTTP " + status + " — " : ""}${String(detail).replace(/\s+/g, " ").slice(0, 220)}`;
+}
+
 function callGemini(model, key, pending) {
-  return callWithRetry(() => fetch(
+  const send = (compact) => callWithRetry(() => fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt() }] }, contents: state.chat }) },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt(compact) }] }, contents: chatWindow() }) },
   ), pending).then((data) => data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "—");
+  return send(false).catch((e) => (isTooLarge(e) ? send(true) : Promise.reject(e)));
 }
 
 async function pickGroqModel(key) {
@@ -1564,23 +1592,23 @@ async function pickGroqModel(key) {
     || ids.find((id) => !/whisper|tts|orpheus|guard|compound/i.test(id)) || null;
 }
 async function callGroq(model, key, pending) {
-  const messages = [
-    { role: "system", content: systemPrompt() },
-    ...state.chat.map((m) => ({ role: m.role === "model" ? "assistant" : "user", content: m.parts[0].text })),
-  ];
-  const run = (m) => callWithRetry(() => fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const send = (m, compact) => callWithRetry(() => fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: m, messages }),
+    body: JSON.stringify({ model: m, messages: [
+      { role: "system", content: systemPrompt(compact) },
+      ...chatWindow().map((x) => ({ role: x.role === "model" ? "assistant" : "user", content: x.parts[0].text })),
+    ] }),
   }), pending).then((data) => data?.choices?.[0]?.message?.content || "—");
+  const attempt = (m) => send(m, false).catch((e) => (isTooLarge(e) ? send(m, true) : Promise.reject(e)));
   try {
-    return await run(model);
+    return await attempt(model);
   } catch (e) {
     if (!e.message.includes("404")) throw e;
     const alt = await pickGroqModel(key);
     if (!alt || alt === model) throw e;
     store.set("groq_model", alt); // recuerda el modelo que sí funciona
-    return run(alt);
+    return attempt(alt);
   }
 }
 
@@ -1608,12 +1636,13 @@ async function ask(text) {
       if (parsed.failed) pending.insertAdjacentHTML("beforeend", `<p class="plan-note">${escapeHtml(t("planParseError"))}</p>`);
       addDownloadLink(pending, reply);
     }
-    state.chat.push({ role: "model", parts: [{ text: reply }] });
+    state.chat.push({ role: "model", parts: [{ text: compactReply(reply) }] });
   } catch (e) {
     console.error(e);
     state.chat.pop();
     pending.classList.remove("pending");
-    pending.textContent = (e.message.includes("503") || e.message.includes("429")) ? t("geminiBusy") : t("geminiError");
+    pending.textContent = /^HTTP (503|429)\b/.test(e.message) ? t("geminiBusy") : t("geminiError");
+    pending.insertAdjacentHTML("beforeend", `<div class="plan-note">${escapeHtml(shortError(e.message || String(e)))}</div>`);
   } finally {
     $("btn-send").disabled = false;
     $("chat-input").focus();
