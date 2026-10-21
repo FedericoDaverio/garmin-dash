@@ -16,11 +16,11 @@
   }
   [data-theme="dark"] {
     --bg: #0f0f11; --card: #19191c; --card-2: #232327;
-    --text: #f3f3f3; --muted: #8d8d94; --line: #2b2b30; --past: #5a5a61;
+    --text: #f3f3f3; --muted: #8d8d94; --line: #2b2b30; --past: #5a5a61; color-scheme: dark;
   }
   [data-theme="light"] {
     --bg: #ebebeb; --card: #ffffff; --card-2: #f3f3f3;
-    --text: #151515; --muted: #6c6c72; --line: #e3e3e3; --past: #c6c6ca;
+    --text: #151515; --muted: #6c6c72; --line: #e3e3e3; --past: #c6c6ca; color-scheme: light;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -80,6 +80,14 @@
   .field input, .field textarea { background: var(--card-2); border: 1px solid var(--line);
          border-radius: var(--r-sm); padding: 10px 12px; }
   .field textarea { min-height: 70px; resize: vertical; }
+  select { background: var(--card-2); color: var(--text); border: 1px solid var(--line);
+           border-radius: var(--r-sm); padding: 10px 12px; }
+  select option { background: var(--card); color: var(--text); }
+  .field select { width: 100%; }
+  .seg { display: inline-flex; background: var(--card); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 20px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 16px; border-radius: 999px;
+                font-weight: 600; cursor: pointer; }
+  .seg button[aria-selected="true"] { background: var(--text); color: var(--bg); }
   .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .progress { margin: 14px 0 4px; }
   .progress .top { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
@@ -239,6 +247,9 @@
   <div class="field"><label for="s-model" id="s-model-label"></label><input id="s-model" type="text"></div>
   <p class="note" id="s-provider-note" style="margin-top:-6px"></p>
   <div class="field"><label for="s-gh" data-i18n="ghToken"></label><input id="s-gh" type="password" autocomplete="off"></div>
+  <div class="field"><label for="s-enc-pass" data-i18n="encPass"></label><input id="s-enc-pass" type="password" autocomplete="off"></div>
+  <button class="btn" id="s-encrypt" data-i18n="encBtn" style="margin-bottom:6px"></button>
+  <p class="note" data-i18n="encNote"></p>
   <div class="dialog-actions">
     <button class="btn" id="s-close" data-i18n="close"></button>
     <button class="btn primary" id="s-save" data-i18n="save"></button>
@@ -283,6 +294,18 @@ const I18N = {
     planParseError: "No pude leer los entrenamientos estructurados. Pídele el plan de nuevo.",
     planNote: "Se crean con objetivos por zona, según tu perfil de Garmin. Envíalo una sola vez: si lo repites, se duplican. Los .fit sirven para copiarlos por USB a la carpeta Garmin/NewFiles del Edge (Garmin Connect web no importa archivos .fit).",
     zonesFromGarmin: "Zonas de tu perfil en Garmin",
+    periodYear: "Anual", periodMonth: "Mensual",
+    monthVsPrev: "Este mes vs mes anterior", monthSameDay: "Mismo día del mes anterior", monthProgress: "Progreso del mes",
+    deltaFull: "{v} vs {m} completo ({p})", deltaSameDay: "{v} vs {p} al mismo día de {m}",
+    lblKm: "Distancia", lblElev: "Desnivel", lblHours: "Horas",
+    tssIfTitle: "TSS e IF por mes (últimos 12 meses)", tssAxis: "Training Stress Score", ifAxis: "Intensity Factor",
+    noTss: "Sin datos de potencia normalizada / TSS en los últimos 12 meses.",
+    encPass: "Contraseña del dashboard", encBtn: "Cifrar token para el repo",
+    encNote: "Descarga token.enc.json. Súbelo a docs/data/ en GitHub y el token se cargará solo en cualquier dispositivo al entrar con tu contraseña. Usa una contraseña larga: el archivo es público.",
+    encNeedBoth: "Pega el token y escribe la contraseña.", encWrongPass: "Esa contraseña no coincide con la del dashboard.",
+    encDone: "Listo: sube token.enc.json a la carpeta docs/data/ de tu repo en GitHub.",
+    tokenLoaded: "Token cargado desde el repo.",
+    tokenInvalid: "El token no es válido o venció. Recarga e ingresa tu contraseña para traer el del repo, o pega uno nuevo en Ajustes.",
     chatPlaceholder: "Pregunta algo sobre tu entrenamiento", send: "Enviar", thinking: "Pensando…", retrying: "reintentando",
     geminiBusy: "El modelo de IA está saturado o llegaste al límite por minuto. Prueba de nuevo en un minuto.",
     chips: ["¿Cómo voy con mis objetivos?", "Propón mi semana de entrenamiento", "Compara este año con el anterior"],
@@ -342,6 +365,18 @@ const I18N = {
     planParseError: "I couldn't read the structured workouts. Ask the coach for the plan again.",
     planNote: "Created with zone targets from your Garmin profile. Send it only once: repeating it creates duplicates. The .fit files can be copied over USB to the Edge's Garmin/NewFiles folder (Garmin Connect web doesn't import .fit files).",
     zonesFromGarmin: "Zones from your Garmin profile",
+    periodYear: "Yearly", periodMonth: "Monthly",
+    monthVsPrev: "This month vs last month", monthSameDay: "Same day of last month", monthProgress: "Month progress",
+    deltaFull: "{v} vs full {m} ({p})", deltaSameDay: "{v} vs {p} on the same day of {m}",
+    lblKm: "Distance", lblElev: "Elevation", lblHours: "Hours",
+    tssIfTitle: "TSS and IF by month (last 12 months)", tssAxis: "Training Stress Score", ifAxis: "Intensity Factor",
+    noTss: "No normalized power / TSS data in the last 12 months.",
+    encPass: "Dashboard password", encBtn: "Encrypt token for the repo",
+    encNote: "Downloads token.enc.json. Upload it to docs/data/ on GitHub and the token loads by itself on any device when you sign in with your password. Use a long password: the file is public.",
+    encNeedBoth: "Paste the token and type the password.", encWrongPass: "That password doesn't match the dashboard's.",
+    encDone: "Done: upload token.enc.json to the docs/data/ folder of your repo on GitHub.",
+    tokenLoaded: "Token loaded from the repo.",
+    tokenInvalid: "The token is invalid or expired. Reload and enter your password to fetch the one in the repo, or paste a new one in Settings.",
     chatPlaceholder: "Ask anything about your training", send: "Send", thinking: "Thinking…", retrying: "retrying",
     geminiBusy: "The AI model is overloaded or you hit the per-minute limit. Try again in a minute.",
     chips: ["How am I doing on my goals?", "Plan my training week", "Compare this year with last year"],
@@ -401,6 +436,18 @@ const I18N = {
     planParseError: "Non sono riuscito a leggere gli allenamenti strutturati. Chiedi di nuovo il piano al coach.",
     planNote: "Creati con obiettivi per zona dal tuo profilo Garmin. Invialo una sola volta: ripetendolo si duplicano. I .fit si copiano via USB nella cartella Garmin/NewFiles dell'Edge (Garmin Connect web non importa file .fit).",
     zonesFromGarmin: "Zone del tuo profilo Garmin",
+    periodYear: "Annuale", periodMonth: "Mensile",
+    monthVsPrev: "Questo mese vs mese scorso", monthSameDay: "Stesso giorno del mese scorso", monthProgress: "Progresso del mese",
+    deltaFull: "{v} vs {m} intero ({p})", deltaSameDay: "{v} vs {p} allo stesso giorno di {m}",
+    lblKm: "Distanza", lblElev: "Dislivello", lblHours: "Ore",
+    tssIfTitle: "TSS e IF per mese (ultimi 12 mesi)", tssAxis: "Training Stress Score", ifAxis: "Intensity Factor",
+    noTss: "Nessun dato di potenza normalizzata / TSS negli ultimi 12 mesi.",
+    encPass: "Password del dashboard", encBtn: "Cifra il token per il repo",
+    encNote: "Scarica token.enc.json. Caricalo in docs/data/ su GitHub e il token si carica da solo su qualsiasi dispositivo quando accedi con la password. Usa una password lunga: il file è pubblico.",
+    encNeedBoth: "Incolla il token e scrivi la password.", encWrongPass: "Questa password non coincide con quella del dashboard.",
+    encDone: "Fatto: carica token.enc.json nella cartella docs/data/ del repo su GitHub.",
+    tokenLoaded: "Token caricato dal repo.",
+    tokenInvalid: "Il token non è valido o è scaduto. Ricarica e inserisci la password per prendere quello del repo, o incollane uno nuovo nelle Impostazioni.",
     chatPlaceholder: "Chiedi qualcosa sul tuo allenamento", send: "Invia", thinking: "Sto pensando…", retrying: "nuovo tentativo",
     geminiBusy: "Il modello IA è sovraccarico o hai raggiunto il limite al minuto. Riprova tra un minuto.",
     chips: ["Come vado con i miei obiettivi?", "Proponi la mia settimana di allenamento", "Confronta quest'anno con l'anno scorso"],
@@ -446,6 +493,7 @@ const state = {
   tab: "cycling",
   lang: store.get("lang", "es"),
   theme: store.get("theme", "dark"),
+  period: store.get("period", "year"),
   chat: [],
 };
 const $ = (id) => document.getElementById(id);
@@ -559,6 +607,90 @@ function renderKpis() {
 // ---------------------------------------------------------------------------
 // Pestaña de deporte
 // ---------------------------------------------------------------------------
+const rgba = (hex, a) => {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((x) => x + x).join("") : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+const daysIn = (y, m) => new Date(y, m + 1, 0).getDate();
+function dailyTotals(list, y, m, key) {
+  const arr = new Array(33).fill(0);
+  for (const a of list) if (a.year === y && a.date.getMonth() === m) arr[a.date.getDate()] += a[key] || 0;
+  return arr;
+}
+const sumDays = (arr, n) => { let s = 0; for (let d = 1; d <= n; d++) s += arr[d]; return s; };
+
+function periodToggleHtml() {
+  return `<div class="seg" role="tablist">
+    <button role="tab" data-period="year" aria-selected="${state.period !== "month"}">${t("periodYear")}</button>
+    <button role="tab" data-period="month" aria-selected="${state.period === "month"}">${t("periodMonth")}</button></div>`;
+}
+function bindPeriodToggle(tab) {
+  document.querySelectorAll("#panel-sport [data-period]").forEach((b) => (b.onclick = () => {
+    state.period = b.dataset.period; store.set("period", state.period); renderSport(tab);
+  }));
+}
+
+function monthCumChart(el, list, key, unit, dec, ctx) {
+  const c = colors();
+  const series = (y, m, len) => {
+    const daily = dailyTotals(list, y, m, key), xs = [], ys = [], cd = [];
+    let acc = 0;
+    for (let d = 1; d <= len; d++) { acc += daily[d]; xs.push(d); ys.push(acc); cd.push(`${d} ${ctx.months[m]} ${y}`); }
+    return { xs, ys, cd };
+  };
+  const prev = series(ctx.prevY, ctx.prevM, ctx.daysPrev), cur = series(ctx.curY, ctx.curM, ctx.dToday);
+  const maxDay = Math.max(ctx.daysPrev, ctx.daysCur);
+  const layout = baseLayout();
+  layout.showlegend = true;
+  layout.legend = { orientation: "h", y: -0.18, font: { color: c.muted, size: 11 } };
+  layout.xaxis = { ...layout.xaxis, range: [1, maxDay], tickmode: "array", tickvals: [1, 5, 10, 15, 20, 25, 30].filter((d) => d <= maxDay) };
+  const tpl = `%{customdata}<br><b>%{y:,.${dec}f} ${unit}</b><extra></extra>`;
+  Plotly.react(el, [
+    { type: "scatter", mode: "lines", x: prev.xs, y: prev.ys, customdata: prev.cd, name: ctx.months[ctx.prevM],
+      line: { color: c.past, width: 1.5 }, fill: "tozeroy", fillcolor: rgba(c.past, 0.35), hovertemplate: tpl },
+    { type: "scatter", mode: "lines", x: cur.xs, y: cur.ys, customdata: cur.cd, name: ctx.months[ctx.curM],
+      line: { color: c.accent, width: 3 }, hovertemplate: tpl },
+  ], layout, plotConfig);
+}
+
+function renderMonthly(tab, list, panel) {
+  const curY = CY, curM = today.getMonth();
+  const pd = new Date(curY, curM - 1, 1);
+  const ctx = { curY, curM, prevY: pd.getFullYear(), prevM: pd.getMonth(), dToday: today.getDate(),
+                daysCur: daysIn(curY, curM), daysPrev: daysIn(pd.getFullYear(), pd.getMonth()), months: t("months") };
+  const sameDay = Math.min(ctx.dToday, ctx.daysPrev);
+  const METRICS = [
+    { id: "m-km", key: "km", label: t("lblKm"), unit: "km", dec: 0, title: t("kmYear") },
+    { id: "m-elev", key: "elev", label: t("lblElev"), unit: "m", dec: 0, title: t("elevYear") },
+    { id: "m-h", key: "h", label: t("lblHours"), unit: "h", dec: 1, title: t("hoursYear") },
+  ].map((m) => {
+    const cur = dailyTotals(list, curY, curM, m.key), prev = dailyTotals(list, ctx.prevY, ctx.prevM, m.key);
+    return { ...m, now: sumDays(cur, ctx.dToday), prevFull: sumDays(prev, ctx.daysPrev), prevSame: sumDays(prev, sameDay) };
+  });
+  const prevName = ctx.months[ctx.prevM], curName = ctx.months[curM];
+  const signed = (v, m) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v), m.dec)} ${m.unit}`;
+  const cards = (labelFn, deltaFn) => METRICS.map((m) => `<div class="kpi"><div class="label">${labelFn(m)}</div>
+      <div class="value">${fmt(m.now, m.dec)}<small>${m.unit}</small></div><div class="delta">${deltaFn(m)}</div></div>`).join("");
+
+  panel.innerHTML = `${periodToggleHtml()}
+    <h2 class="section-title">${t("monthVsPrev")}<span>${curName} vs ${prevName}</span></h2>
+    <div class="kpis tab-totals">${cards((m) => `${m.label} · ${curName}`,
+      (m) => t("deltaFull", { v: signed(m.now - m.prevFull, m), m: prevName, p: `${fmt(m.prevFull, m.dec)} ${m.unit}` }))}</div>
+
+    <h2 class="section-title">${t("monthSameDay")}<span>1–${ctx.dToday} ${curName} vs 1–${sameDay} ${prevName}</span></h2>
+    <div class="kpis tab-totals">${cards((m) => `${m.label} · 1–${ctx.dToday} ${curName}`,
+      (m) => t("deltaSameDay", { v: signed(m.now - m.prevSame, m), m: prevName, p: `${fmt(m.prevSame, m.dec)} ${m.unit}` }))}</div>
+
+    <h2 class="section-title">${t("monthProgress")}<span>${curName} vs ${prevName}</span></h2>
+    ${METRICS.map((m) => `<div class="chart-card wide"><h3>${m.title}</h3><div class="chart" id="${m.id}"></div></div>`).join("")}
+    <div class="download-row"><button class="btn" id="btn-csv">⬇ ${t("download")}</button></div>`;
+
+  bindPeriodToggle(tab);
+  METRICS.forEach((m) => monthCumChart(m.id, list, m.key, m.unit, m.dec, ctx));
+  $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
+}
+
 function renderSport(tab) {
   const list = listFor(tab);
   const panel = $("panel-sport");
@@ -567,6 +699,7 @@ function renderSport(tab) {
   const isCycling = tab === "cycling";
   const isRunning = tab === "running";
   const isAll = tab === "all";
+  if ((isCycling || isRunning) && state.period === "month") { renderMonthly(tab, list, panel); return; }
   const totalsKeys = isAll ? ["acts", "h"] : ["acts", "km", "elev", "h"];
 
   const last = list[list.length - 1];
@@ -602,6 +735,7 @@ function renderSport(tab) {
   }
 
   panel.innerHTML = `
+    ${isCycling || isRunning ? periodToggleHtml() : ""}
     <div class="kpis tab-totals">${totalsCardsHtml(list, totalsKeys)}</div>
 
     <h2 class="section-title">${t("lastActivity")}<span>${escapeHtml(last.n || "")}</span></h2>
@@ -615,7 +749,8 @@ function renderSport(tab) {
       <div class="chart-card"><h3>${t("elevYear")}</h3><div class="chart" id="bar-elev"></div></div>`}
       <div class="chart-card"><h3>${t("hoursYear")}</h3><div class="chart" id="bar-h"></div></div>
     </div>
-    ${isCycling ? `<div class="chart-card wide" style="margin-top:16px"><h3>${t("avgPowerMonth")}</h3><div class="chart" id="bar-pw"></div></div>` : ""}
+    ${isCycling ? `<div class="chart-card wide" style="margin-top:16px"><h3>${t("avgPowerMonth")}</h3><div class="chart" id="bar-pw"></div></div>
+    <div class="chart-card wide" style="margin-top:16px"><h3>${t("tssIfTitle")}</h3><div class="chart" id="tss-chart"></div></div>` : ""}
 
     <h2 class="section-title">${t("progression")}</h2>
     ${isAll ? "" : `<div class="chart-card wide"><h3>${t("kmYear")}</h3><div class="chart" id="cum-km"></div></div>
@@ -635,14 +770,62 @@ function renderSport(tab) {
   barChart("bar-h", years, list, "h", "h", 0);
   cumChart("cum-h", years, list, "h", "h", 1);
 
-  if (isCycling) monthlyPowerBarChart("bar-pw", list);
+  if (isCycling) { monthlyPowerBarChart("bar-pw", list); tssIfChart("tss-chart", list); }
   if (isCycling || isRunning) vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
   if (isCycling && $("ftp-chart")) {
     wellnessLineFig("ftp-chart", state.wellness.ftp, "ftp", colors().accent, "W", 0);
     Plotly.relayout("ftp-chart", { "yaxis.rangemode": "normal" });
   }
 
+  if (isCycling || isRunning) bindPeriodToggle(tab);
   $("btn-csv").onclick = () => downloadCSV(list, `garmin_${tab}_${today.toISOString().slice(0, 10)}.csv`);
+}
+
+function ftpAt(dateStr) {
+  const h = (state.wellness?.ftp || []).filter((p) => p.ftp).sort((a, b) => (a.d < b.d ? -1 : 1));
+  if (!h.length) return null;
+  let v = h[0].ftp;
+  for (const p of h) { if (p.d <= dateStr) v = p.ftp; else break; }
+  return v;
+}
+function actIfTss(a) { // IF y TSS de Garmin si vienen; si no, se calculan con la potencia normalizada y el FTP
+  if (a.sport !== "cycling") return null;
+  let intf = a.intf ?? null;
+  if (intf != null && intf > 3) intf /= 100;
+  if (intf == null && a.np) { const f = ftpAt(a.d); if (f) intf = a.np / f; }
+  let tss = a.tss ?? null;
+  if (tss == null && intf != null) tss = a.h * intf * intf * 100;
+  return intf == null || tss == null ? null : { intf, tss, h: a.h };
+}
+function tssIfChart(el, list) {
+  const c = colors();
+  const months12 = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(CY, today.getMonth() - 11 + i, 1);
+    return { year: d.getFullYear(), month: d.getMonth(), label: t("months")[d.getMonth()] };
+  });
+  const data = months12.map((m) => {
+    const rows = list.map((a) => (a.year === m.year && a.date.getMonth() === m.month ? actIfTss(a) : null)).filter(Boolean);
+    if (!rows.length) return { tss: 0, intf: null };
+    const hours = rows.reduce((s, r) => s + r.h, 0);
+    return { tss: rows.reduce((s, r) => s + r.tss, 0), intf: hours ? rows.reduce((s, r) => s + r.intf * r.h, 0) / hours : null };
+  });
+  if (data.every((d) => d.intf == null)) { $(el).innerHTML = `<div class="empty">${t("noTss")}</div>`; return; }
+  const BLUE = "#3B82F6", RED = "#EF4444";
+  const layout = baseLayout();
+  layout.xaxis.type = "category";
+  layout.margin.r = 56;
+  layout.hovermode = "x unified";
+  layout.yaxis = { ...layout.yaxis, title: { text: t("tssAxis"), font: { size: 11 } } };
+  layout.yaxis2 = { overlaying: "y", side: "right", showgrid: false, zeroline: false, fixedrange: true, rangemode: "tozero",
+                    range: [0, Math.max(1, Math.max(...data.map((d) => d.intf || 0)) * 1.15)],
+                    title: { text: t("ifAxis"), font: { size: 11 } } };
+  Plotly.react(el, [
+    { type: "bar", x: months12.map((m) => m.label), y: data.map((d) => Math.round(d.tss)), name: "TSS", marker: { color: BLUE, cornerradius: 4 },
+      hovertemplate: "TSS: <b>%{y}</b><extra></extra>" },
+    { type: "scatter", mode: "lines+markers", x: months12.map((m) => m.label), y: data.map((d) => d.intf), yaxis: "y2", name: "IF",
+      line: { color: RED, width: 3, shape: "spline", smoothing: 1 }, marker: { size: 7, color: RED }, connectgaps: false,
+      hovertemplate: "IF: <b>%{y:.3f}</b><extra></extra>" },
+  ], layout, plotConfig);
 }
 
 function monthlyPowerBarChart(el, list) {
@@ -747,11 +930,21 @@ function cumChart(el, years, list, key, unit, dec) {
   Plotly.react(el, traces, layout, plotConfig);
 }
 
-function wellnessLineFig(el, points, yKey, color, unit, dec = 0) {
+function addAvgLine(layout, avg, label) {
+  const c = colors();
+  layout.shapes = [...(layout.shapes || []), { type: "line", xref: "paper", x0: 0, x1: 1, y0: avg, y1: avg,
+                                              line: { color: c.text, width: 1.5, dash: "dot" } }];
+  layout.annotations = [...(layout.annotations || []), { xref: "paper", x: 0, y: avg, xanchor: "left", yanchor: "bottom",
+                                                         showarrow: false, text: label, font: { size: 11, color: c.text } }];
+}
+const meanOf = (vals) => { const v = vals.filter((x) => x != null && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+function wellnessLineFig(el, points, yKey, color, unit, dec = 0, withAvg = false) {
   const pts = (points || []).filter((p) => p[yKey] != null);
   const layout = baseLayout();
   layout.xaxis = { ...layout.xaxis, type: "date" };
   if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
+  if (withAvg) addAvgLine(layout, meanOf(pts.map((p) => p[yKey])), `${t("avg")} ${fmt(meanOf(pts.map((p) => p[yKey])), dec)} ${unit}`);
   Plotly.react(el, [{
     type: "scatter", mode: "lines+markers", x: pts.map((p) => p.d), y: pts.map((p) => p[yKey]),
     line: { color, width: 2.5 }, marker: { size: 4, color },
@@ -801,12 +994,14 @@ function acuteLoadChart(el, points) {
   Plotly.react(el, traces, layout, plotConfig);
 }
 
-function weeklyBarFig(el, points, key, color, unit) {
+function weeklyBarFig(el, points, key, color, unit, dec = 0) {
   const c = colors();
   const pts = points || [];
   const layout = baseLayout();
   layout.xaxis = { ...layout.xaxis, type: "date" };
   if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
+  const avg = meanOf(pts.map((p) => p[key]));
+  if (avg != null) addAvgLine(layout, avg, `${t("avg")} ${fmt(avg, dec)}${unit ? " " + unit : ""}`);
   Plotly.react(el, [{
     type: "bar", x: pts.map((p) => p.d), y: pts.map((p) => p[key]),
     marker: { color, cornerradius: 6 },
@@ -885,7 +1080,7 @@ function renderHealth() {
     <h2 class="section-title">${t("stressPerWeek")}</h2>
     <div class="chart-card wide"><div class="chart" id="stress-chart"></div></div>`;
 
-  wellnessLineFig("sleep-chart", w.sleep, "h", colors().accent, "h", 1);
+  wellnessLineFig("sleep-chart", w.sleep, "h", colors().accent, "h", 1, true);
   weeklyBarFig("steps-chart", w.steps_weekly, "steps", colors().past, "steps");
   weeklyBarFig("stress-chart", w.stress_weekly, "stress", colors().past, "");
 }
@@ -1243,6 +1438,7 @@ async function sendPlanToGarmin(workouts, btn) {
       method: "POST", headers: ghHeaders(token),
       body: JSON.stringify({ ref: REPO.ref, inputs: { scope: "workouts", plan } }),
     });
+    if (res.status === 401) { tokenRejected(); btn.disabled = false; return; }
     if (res.status !== 204) throw new Error(res.status);
     toast(t("planSending"), 8000);
     pollRun(base, token, started, (ok) => {
@@ -1389,6 +1585,7 @@ async function triggerSync() {
       method: "POST", headers: ghHeaders(token),
       body: JSON.stringify({ ref: REPO.ref, inputs: { scope: "activities" } }),
     });
+    if (res.status === 401) { tokenRejected(); $("btn-sync").disabled = false; return; }
     if (res.status !== 204) throw new Error(res.status);
     toast(t("syncStarted"), 8000);
     pollRun(base, token, started, (ok) => {
@@ -1441,6 +1638,7 @@ function saveSettings() {
   store.set(`${provider}_key`, $("s-key").value.trim());
   store.set(`${provider}_model`, $("s-model").value.trim());
   store.set("gh_token", $("s-gh").value.trim());
+  try { navigator.storage?.persist?.(); } catch {} // evita que el navegador borre las claves guardadas
   $("settings").close();
   toast(t("saved"));
 }
@@ -1481,6 +1679,7 @@ $("btn-settings").onclick = openSettings;
 $("s-provider").onchange = refreshProviderFields;
 $("s-close").onclick = () => $("settings").close();
 $("s-save").onclick = saveSettings;
+$("s-encrypt").onclick = encryptTokenForRepo;
 $("btn-sync").onclick = triggerSync;
 $("btn-goals").onclick = saveGoals;
 $("btn-send").onclick = () => ask($("chat-input").value);
@@ -1502,6 +1701,7 @@ async function sha256Hex(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 async function startApp() {
+  try { navigator.storage?.persist?.(); } catch {}
   applyStaticText();
   fillGoals();
   showTab("cycling");
@@ -1512,12 +1712,53 @@ async function startApp() {
     $("panel-sport").innerHTML = `<div class="empty">${t("loadError")}</div>`;
   }
 }
+// Token de GitHub cifrado con la contraseña del dashboard (AES-GCM + PBKDF2), guardado en data/token.enc.json
+const PBKDF2_ITER = 600000;
+const b64 = (u8) => btoa(String.fromCharCode(...u8));
+const unb64 = (str) => Uint8Array.from(atob(str), (ch) => ch.charCodeAt(0));
+async function deriveKey(password, salt, iter) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" }, base,
+                                 { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function encryptToken(token, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt, PBKDF2_ITER);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(token)));
+  return JSON.stringify({ v: 1, iter: PBKDF2_ITER, salt: b64(salt), iv: b64(iv), ct: b64(ct) }, null, 2);
+}
+async function decryptToken(blob, password) {
+  const key = await deriveKey(password, unb64(blob.salt), blob.iter || PBKDF2_ITER);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(blob.iv) }, key, unb64(blob.ct));
+  return new TextDecoder().decode(pt);
+}
+async function encryptTokenForRepo() {
+  const token = $("s-gh").value.trim(), pass = $("s-enc-pass").value;
+  if (!token || !pass) { toast(t("encNeedBoth")); return; }
+  if (PASSWORD_HASH && (await sha256Hex(pass)) !== PASSWORD_HASH) { toast(t("encWrongPass")); return; }
+  downloadBlob(new Blob([await encryptToken(token, pass)], { type: "application/json" }), "token.enc.json");
+  toast(t("encDone"), 10000);
+}
+async function loadTokenFromRepo(password) {
+  try {
+    const res = await fetch("data/token.enc.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const token = await decryptToken(await res.json(), password);
+    if (token && token !== store.get("gh_token", "")) { store.set("gh_token", token); toast(t("tokenLoaded")); }
+  } catch { /* sin archivo o contraseña distinta: se usa el token guardado en este navegador */ }
+}
+function tokenRejected() { // GitHub respondió 401: forzar nuevo ingreso para traer el token del repo
+  store.set("gh_token", ""); store.set("unlocked", "");
+  toast(t("tokenInvalid"), 12000);
+}
+
 async function tryUnlock() {
   const input = $("lock-input").value;
   if ((await sha256Hex(input)) === PASSWORD_HASH) {
     store.set("unlocked", PASSWORD_HASH);
     $("lock-screen").remove();
     startApp();
+    loadTokenFromRepo(input);
   } else {
     $("lock-error").textContent = t("lockWrong");
   }
