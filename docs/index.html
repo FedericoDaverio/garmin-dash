@@ -774,8 +774,8 @@ function renderSport(tab) {
   if (isCycling) { monthlyPowerBarChart("bar-pw", list); tssIfChart("tss-chart", list); }
   if (isCycling || isRunning) vo2maxChart("vo2-chart", isCycling ? "bike" : "run");
   if (isCycling && $("ftp-chart")) {
-    wellnessLineFig("ftp-chart", state.wellness.ftp, "ftp", colors().accent, "W", 0);
-    Plotly.relayout("ftp-chart", { "yaxis.rangemode": "normal" });
+    wellnessLineFig("ftp-chart", state.wellness.ftp, "ftp", colors().accent, "W", 0, false, true);
+    Plotly.relayout("ftp-chart", { "xaxis.range": [new Date(today - 365 * 86400000).toISOString().slice(0, 10), today.toISOString().slice(0, 10)] });
   }
 
   if (isCycling || isRunning) bindPeriodToggle(tab);
@@ -940,20 +940,25 @@ function addAvgLine(layout, avg, label) {
 }
 const meanOf = (vals) => { const v = vals.filter((x) => x != null && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 
-function wellnessLineFig(el, points, yKey, color, unit, dec = 0, withAvg = false) {
+function wellnessLineFig(el, points, yKey, color, unit, dec = 0, withAvg = false, tight = false) {
   const pts = (points || []).filter((p) => p[yKey] != null);
   const layout = baseLayout();
   layout.xaxis = { ...layout.xaxis, type: "date" };
   if (!pts.length) { Plotly.react(el, [], layout, plotConfig); return; }
   if (withAvg) addAvgLine(layout, meanOf(pts.map((p) => p[yKey])), `${t("avg")} ${fmt(meanOf(pts.map((p) => p[yKey])), dec)} ${unit}`);
+  if (tight) { // escala ajustada al rango real de los datos, sin partir de 0
+    const ys = pts.map((p) => p[yKey]), lo = Math.min(...ys), hi = Math.max(...ys);
+    const pad = Math.max((hi - lo) * 0.3, unit === "W" ? 5 : 1);
+    layout.yaxis = { ...layout.yaxis, rangemode: "normal", range: [lo - pad, hi + pad] };
+  }
   Plotly.react(el, [{
     type: "scatter", mode: "lines+markers", x: pts.map((p) => p.d), y: pts.map((p) => p[yKey]),
-    line: { color, width: 2.5 }, marker: { size: 4, color },
+    line: { color, width: 2.5 }, marker: { size: pts.length <= 15 ? 8 : 4, color },
     hovertemplate: `%{x}<br><b>%{y:.${dec}f} ${unit}</b><extra></extra>`,
   }], layout, plotConfig);
 }
 function vo2maxChart(el, key) {
-  wellnessLineFig(el, state.wellness?.vo2max, key, colors().accent, "ml/kg/min", 1);
+  wellnessLineFig(el, state.wellness?.vo2max, key, colors().accent, "ml/kg/min", 1, false, true);
 }
 
 // ---------------------------------------------------------------------------
