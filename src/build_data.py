@@ -81,6 +81,8 @@ def _row(a: dict) -> dict:
         "spd": round(speed * 3.6, 1) if speed else None,
         "pw": round(a["avgPower"]) if a.get("avgPower") else None,
         "np": round(a["normPower"]) if a.get("normPower") else None,
+        "tss": round(a["trainingStressScore"]) if a.get("trainingStressScore") else None,
+        "intf": round(a["intensityFactor"], 3) if a.get("intensityFactor") else None,
     }
 
 
